@@ -16,9 +16,13 @@ const ExpoSecureStoreAdapter = {
 
 // TODO: Need your actual Supabase URL & Anon Key from project settings
 const supabaseUrl =
-  process.env.EXPO_PUBLIC_SUPABASE_URL || "YOUR_SUPABASE_URL_HERE";
+  process.env.EXPO_PUBLIC_SUPABASE_URL || "https://example.supabase.co";
 const supabaseAnonKey =
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "YOUR_SUPABASE_ANON_KEY_HERE";
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
+
+export const isSupabaseConfigured =
+  !!process.env.EXPO_PUBLIC_SUPABASE_URL &&
+  !!process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {

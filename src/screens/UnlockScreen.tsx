@@ -3,25 +3,97 @@ import {
   View,
   Text,
   TouchableOpacity,
-  SafeAreaView,
   Platform,
   ScrollView,
   TextInput,
   KeyboardAvoidingView,
+  Alert,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthStore } from "../stores/useAuthStore";
 import { StatusBar } from "expo-status-bar";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import * as LocalAuthentication from "expo-local-authentication";
+import * as SecureStore from "expo-secure-store";
+import { supabase } from "../services/supabase";
 
 export default function UnlockScreen() {
   const setUnlocked = useAuthStore((state) => state.setUnlocked);
   const logout = useAuthStore((state) => state.logout);
+  const user = useAuthStore((state) => state.user);
   const [password, setPassword] = useState("");
+  const [isUnlocking, setIsUnlocking] = useState(false);
 
-  const handleUnlock = () => {
-    // Basic interaction simulate unlock
-    setUnlocked(true);
+  React.useEffect(() => {
+    if (!user) {
+      return;
+    }
+    void handleBiometricUnlock();
+  }, [user]);
+
+  const handleUnlock = async () => {
+    if (isUnlocking) {
+      return;
+    }
+
+    setIsUnlocking(true);
+    try {
+      const key = `docvault:pin:${user?.id ?? "anonymous"}`;
+      const saved = await SecureStore.getItemAsync(key);
+
+      if (!saved) {
+        if (!/^\d{6}$/.test(password.trim())) {
+          Alert.alert("Set Security PIN", "PIN must be exactly 6 digits.");
+          return;
+        }
+        await SecureStore.setItemAsync(key, password.trim());
+        setUnlocked(true);
+        return;
+      }
+
+      if (/^\d{6}$/.test(password.trim()) && password.trim() === saved) {
+        setUnlocked(true);
+        return;
+      }
+
+      Alert.alert("Unlock Failed", "Incorrect 6-digit PIN.");
+    } finally {
+      setIsUnlocking(false);
+    }
+  };
+
+  const handleBiometricUnlock = async () => {
+    if (isUnlocking) {
+      return;
+    }
+
+    setIsUnlocking(true);
+    try {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+
+      if (!hasHardware || !isEnrolled) {
+        return;
+      }
+
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: "Unlock DocVault",
+        cancelLabel: "Cancel",
+        fallbackLabel: "Use Master Password",
+      });
+
+      if (result.success) {
+        setUnlocked(true);
+      }
+    } finally {
+      setIsUnlocking(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    logout();
   };
 
   return (
@@ -56,13 +128,18 @@ export default function UnlockScreen() {
                   <Feather name="lock" size={20} color="#71717A" />
                   <TextInput
                     className="flex-1 text-white text-xl font-bold ml-4 tracking-wider h-full"
-                    placeholder="Master Password"
+                    placeholder="6-digit PIN"
                     placeholderTextColor="#52525B"
                     secureTextEntry
+                    keyboardType="number-pad"
+                    maxLength={6}
                     value={password}
-                    onChangeText={setPassword}
+                    onChangeText={(val) =>
+                      setPassword(val.replace(/[^0-9]/g, ""))
+                    }
                     autoCapitalize="none"
                     autoCorrect={false}
+                    editable={!isUnlocking}
                   />
                 </View>
 
@@ -78,7 +155,7 @@ export default function UnlockScreen() {
                     className="py-5 px-8 flex-row items-center justify-center h-20"
                   >
                     <Text className="text-black text-xl font-bold tracking-tight mr-3">
-                      Decrypt Volumn
+                      {isUnlocking ? "Verifying..." : "Decrypt Vault"}
                     </Text>
                     <Feather name="unlock" size={20} color="black" />
                   </LinearGradient>
@@ -86,7 +163,7 @@ export default function UnlockScreen() {
 
                 <TouchableOpacity
                   activeOpacity={0.8}
-                  onPress={handleUnlock}
+                  onPress={handleBiometricUnlock}
                   className="w-full bg-neutral-900 border border-neutral-800 rounded-[28px] py-5 px-8 flex-row items-center justify-center h-20 mt-2"
                 >
                   <Feather
@@ -103,7 +180,10 @@ export default function UnlockScreen() {
             </View>
 
             <View>
-              <TouchableOpacity className="items-center py-4" onPress={logout}>
+              <TouchableOpacity
+                className="items-center py-4"
+                onPress={handleSignOut}
+              >
                 <Text className="text-red-500 font-bold uppercase tracking-widest text-xs">
                   Terminate Session
                 </Text>

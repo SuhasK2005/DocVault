@@ -3,6 +3,7 @@
 A secure, E2EE mobile application using Expo (React Native) and Supabase to store documents, notes, and passwords.
 
 **Steps**
+
 1. **Phase 1: Project Setup & Authentication**
    - Initialize the `DocVault` Expo project with NativeWind (Tailwind) support.
    - Configure Supabase client for React Native.
@@ -25,6 +26,7 @@ A secure, E2EE mobile application using Expo (React Native) and Supabase to stor
    - Review E2EE workflows by logging in on a second device to ensure files only open with the correct Master Password.
 
 **Relevant files**
+
 - `App.tsx` — Main entry and Navigation container.
 - `src/stores/useAuthStore.ts` — Zustand store for auth state and master key caching.
 - `src/services/supabase.ts` — Supabase client initialization.
@@ -33,11 +35,13 @@ A secure, E2EE mobile application using Expo (React Native) and Supabase to stor
 - `src/screens/UnlockScreen.tsx` — Biometric / Master password prompt.
 
 **Verification**
+
 1. Ensure opening the app or resuming from background triggers the Unlock screen.
 2. Verify network tab that file payloads and notes uploaded to Supabase are encrypted ciphertexts.
 3. Test Google login success with Expo Go/Development build.
 
 **Decisions**
+
 - **Styling**: NativeWind
 - **E2EE Model**: User-provided Master Password (highest security, no server-side key escrow).
 - **Backend**: Supabase PostgreSQL and Storage.

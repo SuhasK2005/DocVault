@@ -3,16 +3,24 @@ import {
   View,
   Text,
   TouchableOpacity,
-  SafeAreaView,
   Animated,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthStore } from "../stores/useAuthStore";
 import { StatusBar } from "expo-status-bar";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import * as WebBrowser from "expo-web-browser";
+import * as AuthSession from "expo-auth-session";
+import * as Linking from "expo-linking";
+import { isSupabaseConfigured, supabase } from "../services/supabase";
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
-  const setUser = useAuthStore((state) => state.setUser);
+  const [isLoading, setIsLoading] = React.useState(false);
   const pulse = React.useRef(new Animated.Value(0.95)).current;
 
   React.useEffect(() => {
@@ -36,7 +44,123 @@ export default function LoginScreen() {
   }, [pulse]);
 
   const handleGoogleLogin = async () => {
-    setUser({ id: "docvault-founder", email: "founder@docvault.io" });
+    if (isLoading) {
+      return;
+    }
+
+    const redirectTo = AuthSession.makeRedirectUri();
+
+    console.log("Expected Return URL:", redirectTo);
+
+    setIsLoading(true);
+    try {
+      if (!isSupabaseConfigured) {
+        Alert.alert(
+          "Configure Supabase",
+          "Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in your environment before using Google login.",
+        );
+        return;
+      }
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+          queryParams: {
+            access_type: "offline",
+            prompt: "consent",
+          },
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data?.url) {
+        throw new Error("Failed to initialize Google sign-in URL.");
+      }
+
+      const result = await WebBrowser.openAuthSessionAsync(
+        data.url,
+        redirectTo,
+      );
+
+      if (result.type !== "success" || !result.url) {
+        return;
+      }
+
+      // Handle # fragments which Supabase sometimes returns instead of ? query params
+      // depending on the implicit vs explicit flow settings.
+      const urlToParse = result.url.replace("#", "?");
+      const parsed = Linking.parse(urlToParse);
+
+      const authError =
+        typeof parsed.queryParams?.error_description === "string"
+          ? parsed.queryParams.error_description
+          : typeof parsed.queryParams?.error === "string"
+            ? parsed.queryParams.error
+            : null;
+
+      if (authError) {
+        throw new Error(authError);
+      }
+
+      const code =
+        parsed.queryParams?.code && typeof parsed.queryParams.code === "string"
+          ? parsed.queryParams.code
+          : null;
+
+      if (!code) {
+        // Try getting access_token if implicit flow was used
+        const access_token =
+          parsed.queryParams?.access_token &&
+          typeof parsed.queryParams.access_token === "string"
+            ? parsed.queryParams.access_token
+            : null;
+
+        const refresh_token =
+          parsed.queryParams?.refresh_token &&
+          typeof parsed.queryParams.refresh_token === "string"
+            ? parsed.queryParams.refresh_token
+            : null;
+
+        if (access_token && refresh_token) {
+          const { data: sessionData, error: sessionError } =
+            await supabase.auth.setSession({
+              access_token,
+              refresh_token,
+            });
+          if (sessionError) throw sessionError;
+          useAuthStore.getState().setSession(sessionData.session);
+          return;
+        }
+
+        throw new Error(
+          "No auth code or access token returned from Google OAuth.",
+        );
+      }
+
+      const { error: exchangeError, data: sessionData } =
+        await supabase.auth.exchangeCodeForSession(code);
+      if (exchangeError) {
+        throw exchangeError;
+      }
+
+      // Force an update to the auth store with the newly acquired session
+      // This will trigger App.tsx to unmount LoginScreen and mount Dashboard/Unlock
+      useAuthStore.getState().setSession(sessionData.session);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Google sign-in failed";
+      Alert.alert(
+        "Login Failed",
+        `${message}\n\nEnsure this Redirect URL is in Supabase:\n${redirectTo}`,
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -64,7 +188,7 @@ export default function LoginScreen() {
             <Feather name="shield" size={28} color="#D4D4D8" />
           </View>
 
-          <Text className="text-[64px] font-black text-white leading-[65px] tracking-tighter">
+          <Text className="text-[60px] font-black text-white leading-[65px] tracking-tighter">
             Fortify.{"\n"}Everything.
           </Text>
 
@@ -91,10 +215,14 @@ export default function LoginScreen() {
                   <Feather name="globe" size={18} color="white" />
                 </View>
                 <Text className="text-black text-xl font-bold tracking-tight">
-                  Initiate Uplink
+                  {isLoading ? "Connecting..." : "Initiate Uplink"}
                 </Text>
               </View>
-              <Feather name="arrow-right" size={24} color="black" />
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#000000" />
+              ) : (
+                <Feather name="arrow-right" size={24} color="black" />
+              )}
             </LinearGradient>
           </TouchableOpacity>
 

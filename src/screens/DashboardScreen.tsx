@@ -3,10 +3,10 @@ import {
   View,
   Text,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   Dimensions,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthStore } from "../stores/useAuthStore";
 import { StatusBar } from "expo-status-bar";
 import { Feather } from "@expo/vector-icons";

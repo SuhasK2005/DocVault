@@ -1,7 +1,9 @@
 {
   "expo": {
     "name": "DocVault",
-    "slug": "DocVault",
+    "owner": "suhask05",
+    "slug": "docvault",
+    "scheme": "docvault",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -26,10 +28,9 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [
-      "expo-secure-store",
-      "expo-web-browser",
-      "expo-font"
-    ]
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "plugins": ["expo-secure-store", "expo-web-browser", "expo-font"]
   }
 }
