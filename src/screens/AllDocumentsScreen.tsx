@@ -1312,7 +1312,9 @@ export default function AllDocumentsScreen() {
                   className="flex-1 bg-black py-4 rounded-full items-center"
                   onPress={handleCreateNote}
                 >
-                  <Text className="text-white font-bold text-lg">Save Note</Text>
+                  <Text className="text-white font-bold text-lg">
+                    Save Note
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>

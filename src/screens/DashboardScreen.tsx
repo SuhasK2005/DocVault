@@ -69,7 +69,9 @@ export default function DashboardScreen() {
   const [launchingAction, setLaunchingAction] = useState(false);
   const [documentPickerBusy, setDocumentPickerBusy] = useState(false);
   const [mediaPickerBusy, setMediaPickerBusy] = useState(false);
-  const [activeDestinationFolderId, setActiveDestinationFolderId] = useState<string | null>(null);
+  const [activeDestinationFolderId, setActiveDestinationFolderId] = useState<
+    string | null
+  >(null);
   const actionLockRef = useRef(false);
   const pickerLockRef = useRef(false);
 
@@ -688,7 +690,12 @@ export default function DashboardScreen() {
           <TouchableOpacity
             className="flex-1 py-4 items-center rounded-full bg-neutral-100/50 flex-row justify-center mx-1"
             onPress={() => openFolderPicker("uploadFiles")}
-            disabled={uploading || launchingAction || documentPickerBusy || mediaPickerBusy}
+            disabled={
+              uploading ||
+              launchingAction ||
+              documentPickerBusy ||
+              mediaPickerBusy
+            }
           >
             {uploading ? (
               <ActivityIndicator color="black" size="small" />
@@ -700,14 +707,24 @@ export default function DashboardScreen() {
           <TouchableOpacity
             className="w-14 h-14 bg-black rounded-full items-center justify-center mx-1"
             onPress={() => openFolderPicker("scan")}
-            disabled={uploading || launchingAction || documentPickerBusy || mediaPickerBusy}
+            disabled={
+              uploading ||
+              launchingAction ||
+              documentPickerBusy ||
+              mediaPickerBusy
+            }
           >
             <Feather name="camera" size={24} color="white" />
           </TouchableOpacity>
           <TouchableOpacity
             className="flex-1 py-4 items-center rounded-full bg-neutral-100/50 flex-row justify-center mx-1"
             onPress={() => openFolderPicker("note")}
-            disabled={uploading || launchingAction || documentPickerBusy || mediaPickerBusy}
+            disabled={
+              uploading ||
+              launchingAction ||
+              documentPickerBusy ||
+              mediaPickerBusy
+            }
           >
             <Feather name="edit-2" size={18} color="black" />
             <Text className="font-bold text-black ml-2">Note</Text>
@@ -855,7 +872,10 @@ export default function DashboardScreen() {
                   mediaPickerBusy
                 }
               >
-                {uploading || launchingAction || documentPickerBusy || mediaPickerBusy ? (
+                {uploading ||
+                launchingAction ||
+                documentPickerBusy ||
+                mediaPickerBusy ? (
                   <ActivityIndicator color="white" />
                 ) : (
                   <Text className="font-bold text-white">
@@ -939,57 +959,59 @@ export default function DashboardScreen() {
             keyboardVerticalOffset={24}
             className="w-full"
           >
-          <View className="bg-white pt-6 px-6 pb-10 rounded-t-[32px] h-[80%]">
-            <View className="flex-row justify-between items-center mb-6">
-              <Text className="text-2xl font-black text-black">
-                Secure Note
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  Keyboard.dismiss();
-                  setNoteModalVisible(false);
-                }}
-              >
-                <Feather name="x" size={24} color="black" />
-              </TouchableOpacity>
+            <View className="bg-white pt-6 px-6 pb-10 rounded-t-[32px] h-[80%]">
+              <View className="flex-row justify-between items-center mb-6">
+                <Text className="text-2xl font-black text-black">
+                  Secure Note
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setNoteModalVisible(false);
+                  }}
+                >
+                  <Feather name="x" size={24} color="black" />
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                className="text-xl font-bold bg-neutral-100 p-4 rounded-xl mb-4"
+                placeholderTextColor="gray"
+                placeholder="Note Title"
+                value={noteTitle}
+                onChangeText={setNoteTitle}
+              />
+              <TextInput
+                className="flex-1 text-black bg-neutral-100 p-4 rounded-xl mb-6 text-lg"
+                placeholderTextColor="gray"
+                placeholder="Write your notes here..."
+                multiline
+                returnKeyType="done"
+                blurOnSubmit
+                onSubmitEditing={Keyboard.dismiss}
+                textAlignVertical="top"
+                value={noteContent}
+                onChangeText={setNoteContent}
+              />
+              <View className="flex-row gap-2">
+                <TouchableOpacity
+                  className="flex-1 bg-neutral-200 py-4 rounded-full items-center"
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setNoteModalVisible(false);
+                  }}
+                >
+                  <Text className="text-black font-bold text-lg">Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  className="flex-1 bg-black py-4 rounded-full items-center"
+                  onPress={handleCreateNote}
+                >
+                  <Text className="text-white font-bold text-lg">
+                    Save Note
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <TextInput
-              className="text-xl font-bold bg-neutral-100 p-4 rounded-xl mb-4"
-              placeholderTextColor="gray"
-              placeholder="Note Title"
-              value={noteTitle}
-              onChangeText={setNoteTitle}
-            />
-            <TextInput
-              className="flex-1 text-black bg-neutral-100 p-4 rounded-xl mb-6 text-lg"
-              placeholderTextColor="gray"
-              placeholder="Write your notes here..."
-              multiline
-              returnKeyType="done"
-              blurOnSubmit
-              onSubmitEditing={Keyboard.dismiss}
-              textAlignVertical="top"
-              value={noteContent}
-              onChangeText={setNoteContent}
-            />
-            <View className="flex-row gap-2">
-              <TouchableOpacity
-                className="flex-1 bg-neutral-200 py-4 rounded-full items-center"
-                onPress={() => {
-                  Keyboard.dismiss();
-                  setNoteModalVisible(false);
-                }}
-              >
-                <Text className="text-black font-bold text-lg">Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="flex-1 bg-black py-4 rounded-full items-center"
-                onPress={handleCreateNote}
-              >
-                <Text className="text-white font-bold text-lg">Save Note</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
           </KeyboardAvoidingView>
         </View>
       </Modal>
