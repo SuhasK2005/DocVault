@@ -7,17 +7,18 @@ A secure, E2EE mobile application using Expo (React Native) and Supabase to stor
 1. **Phase 1: Project Setup & Authentication**
    - Initialize the `DocVault` Expo project with NativeWind (Tailwind) support.
    - Configure Supabase client for React Native.
-   - Implement Google OAuth using `expo-auth-session`.
+   - Implement Google OAuth using `expo-auth-session` and link via `expo-linking`.
    - Setup Zustand store for session state.
-   - Add Expo Local Authentication (Biometric lock).
-2. **Phase 2: Master Password & Core Navigation**
-   - Implement Master Password setup screen (hash for DB validation, derive key for E2EE via `crypto-js`).
-   - Setup React Navigation with protected routes (Splash, Login, Unlock, Dashboard, Files, Notes).
+2. **Phase 2: Gateway Lock & Cryptographic Setup**
+   - Implement App Unlock via device Biometrics (FaceID/Fingerprint) / Passcode as the primary gateway.
+   - If a new user signs in, prompt them to set up a 6-digit Master PIN (hashed for DB validation, deriving a 256-bit AES key locally using `crypto-js` and `expo-crypto` PRNG).
+   - If an existing user returns, Biometrics instantly unlocks them into the Dashboard. They only provide the Master PIN when actually reading/writing encrypted files.
 3. **Phase 3: Folder & File Management**
-   - Implement Dashboard UI (Folders & Recent Files).
-   - Create Supabase functions/endpoints for Folder CRUD.
-   - Integrate `expo-document-picker` to select files.
-   - Encrypt file chunks using derived master key locally before pushing to Supabase Storage.
+   - Implement Dashboard UI displaying User Folders and Recent Files.
+   - Define Supabase PostgreSQL schemas for `folders` and `documents` (including `is_encrypted` flags).
+   - Integrate `expo-document-picker` to select and prepare files for upload.
+   - Implement on-the-fly prompt for the Master PIN when the user decides to encrypt a file or open an already encrypted file (deriving the key just-in-time).
+   - Upload encrypted ciphertext to Supabase Storage.
 4. **Phase 4: Secure Notes & Password Vault**
    - Create UI for Note and Password creation.
    - Encrypt notes/passwords on-device and insert encrypted text into Supabase database.

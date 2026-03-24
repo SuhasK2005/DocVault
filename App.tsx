@@ -9,6 +9,7 @@ import { supabase } from "./src/services/supabase";
 import LoginScreen from "./src/screens/LoginScreen";
 import UnlockScreen from "./src/screens/UnlockScreen";
 import DashboardScreen from "./src/screens/DashboardScreen";
+import AllDocumentsScreen from "./src/screens/AllDocumentsScreen";
 
 import * as Linking from "expo-linking";
 
@@ -29,6 +30,7 @@ const linking = {
       Login: "",
       Unlock: "unlock",
       Dashboard: "dashboard",
+      AllDocuments: "documents",
     },
   },
 };
@@ -108,7 +110,10 @@ export default function App() {
         ) : !isUnlocked ? (
           <Stack.Screen name="Unlock" component={UnlockScreen} />
         ) : (
-          <Stack.Screen name="Dashboard" component={DashboardScreen} />
+          <>
+            <Stack.Screen name="Dashboard" component={DashboardScreen} />
+            <Stack.Screen name="AllDocuments" component={AllDocumentsScreen} />
+          </>
         )}
       </Stack.Navigator>
     </NavigationContainer>
