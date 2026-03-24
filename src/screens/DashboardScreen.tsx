@@ -1,128 +1,161 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Modal,
-  TextInput,
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  Dimensions,
-  Alert,
   ActivityIndicator,
+  Alert,
+  InteractionManager,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
-import { useAuthStore } from "../stores/useAuthStore";
 import { StatusBar } from "expo-status-bar";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { useNavigation } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import * as Print from "expo-print";
-import * as Sharing from "expo-sharing";
 import { supabase } from "../services/supabase";
-import { deriveMasterKey } from "../services/encryption";
+import { useAuthStore } from "../stores/useAuthStore";
 
-const { width } = Dimensions.get("window");
+let globalDocumentPickerActive = false;
+let globalMediaPickerActive = false;
+
+type PendingAction = "uploadFiles" | "uploadGallery" | "scan" | "note" | null;
+
+type FolderNode = {
+  id: string;
+  name: string;
+  parent_id: string | null;
+  created_at?: string;
+};
 
 export default function DashboardScreen() {
   const navigation = useNavigation<any>();
-  const logout = useAuthStore((state) => state.logout);
-  const setUnlocked = useAuthStore((state) => state.setUnlocked);
   const user = useAuthStore((state) => state.user);
-  const [uploading, setUploading] = useState(false);
-  const [recentFiles, setRecentFiles] = useState<any[]>([]);
+  const setUnlocked = useAuthStore((state) => state.setUnlocked);
 
-  // Scan Modal State
+  const [documentsCount, setDocumentsCount] = useState(0);
+  const [folders, setFolders] = useState<FolderNode[]>([]);
+  const [uploading, setUploading] = useState(false);
+
+  const [folderPickerVisible, setFolderPickerVisible] = useState(false);
+  const [pickerStack, setPickerStack] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+
+  const [folderCreateVisible, setFolderCreateVisible] = useState(false);
+  const [createParentId, setCreateParentId] = useState<string | null>(null);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const [supportsNestedFolders, setSupportsNestedFolders] = useState(true);
+
   const [scanModalVisible, setScanModalVisible] = useState(false);
   const [scannedImageUri, setScannedImageUri] = useState<string | null>(null);
   const [scannedFileName, setScannedFileName] = useState("");
 
-  // Note Modal State
   const [noteModalVisible, setNoteModalVisible] = useState(false);
   const [noteTitle, setNoteTitle] = useState("");
   const [noteContent, setNoteContent] = useState("");
 
-  // PIN Unlock State
-  const [pinModalVisible, setPinModalVisible] = useState(false);
-  const [enteredPin, setEnteredPin] = useState("");
-  const [selectedDocument, setSelectedDocument] = useState<any>(null);
-  const [profileSecurity, setProfileSecurity] = useState<{
-    master_salt: string;
-    master_hash: string;
-  } | null>(null);
-  const [unlockingDocument, setUnlockingDocument] = useState(false);
+  const [launchingAction, setLaunchingAction] = useState(false);
+  const [documentPickerBusy, setDocumentPickerBusy] = useState(false);
+  const [mediaPickerBusy, setMediaPickerBusy] = useState(false);
+  const [activeDestinationFolderId, setActiveDestinationFolderId] = useState<string | null>(null);
+  const actionLockRef = useRef(false);
+  const pickerLockRef = useRef(false);
 
-  const formatBytes = (bytes: number | null) => {
-    if (!bytes) return "0 B";
-    const k = 1024;
-    const sizes = ["B", "KB", "MB", "GB", "TB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
-  };
+  const currentPickerFolderId = useMemo(
+    () => (pickerStack.length ? pickerStack[pickerStack.length - 1].id : null),
+    [pickerStack],
+  );
 
-  const getFileIconAndColor = (mimeType: string | null) => {
-    if (!mimeType) return { type: "file", color: "#737373" };
-    if (mimeType.startsWith("image/"))
-      return { type: "image", color: "#EA580C" };
-    if (mimeType === "application/pdf")
-      return { type: "file-text", color: "#4F46E5" };
-    if (mimeType.includes("word") || mimeType.includes("text/"))
-      return { type: "file-text", color: "#059669" };
-    return { type: "file", color: "#4F46E5" };
-  };
+  const currentPickerFolderName = useMemo(
+    () =>
+      pickerStack.length
+        ? pickerStack[pickerStack.length - 1].name
+        : "File Hub",
+    [pickerStack],
+  );
 
-  const fetchDocuments = async () => {
+  const visiblePickerFolders = useMemo(() => {
+    return folders.filter(
+      (folder) => (folder.parent_id || null) === currentPickerFolderId,
+    );
+  }, [folders, currentPickerFolderId]);
+
+  const recentFolders = useMemo(() => folders.slice(0, 4), [folders]);
+
+  const fetchDocumentsCount = async () => {
     if (!user?.id) return;
     try {
-      const { data, error } = await supabase
+      const { count, error } = await supabase
         .from("documents")
-        .select("*")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+      setDocumentsCount(count || 0);
+    } catch {
+      setDocumentsCount(0);
+    }
+  };
+
+  const fetchFolders = async () => {
+    if (!user?.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("folders")
+        .select("id, name, parent_id, created_at")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        const missingParentColumn =
+          error.message?.toLowerCase().includes("parent_id") ||
+          error.code === "42703";
 
-      if (data) {
-        const formattedData = data.map((doc: any) => ({
-          id: doc.id,
-          name: doc.name,
-          size: formatBytes(doc.size_bytes),
-          mime_type: doc.mime_type,
-          storage_path: doc.storage_path,
-          ...getFileIconAndColor(doc.mime_type),
-        }));
-        setRecentFiles(formattedData);
+        if (!missingParentColumn) throw error;
+
+        setSupportsNestedFolders(false);
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from("folders")
+          .select("id, name, created_at")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+
+        if (fallbackError) throw fallbackError;
+
+        setFolders(
+          ((fallbackData || []) as any[]).map((folder) => ({
+            id: folder.id,
+            name: folder.name,
+            parent_id: null,
+            created_at: folder.created_at,
+          })),
+        );
+        return;
       }
-    } catch (err) {
-      console.error("Error fetching documents:", err);
+
+      setSupportsNestedFolders(true);
+      setFolders((data || []) as FolderNode[]);
+    } catch (err: any) {
+      Alert.alert("Error", err?.message || "Could not load folders");
     }
   };
 
   useEffect(() => {
-    fetchDocuments();
-  }, [user?.id]);
-
-  useEffect(() => {
-    const fetchProfileSecurity = async () => {
-      if (!user?.id) return;
-      try {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("master_salt, master_hash")
-          .eq("id", user.id)
-          .single();
-
-        if (!error && data) {
-          setProfileSecurity(data);
-        }
-      } catch {
-        // Non-blocking: we'll retry during unlock if prefetch fails.
-      }
-    };
-
-    fetchProfileSecurity();
+    fetchDocumentsCount();
+    fetchFolders();
   }, [user?.id]);
 
   const lockVault = () => {
@@ -134,6 +167,7 @@ export default function DashboardScreen() {
     name: string;
     mimeType: string;
     size?: number | null;
+    folderId: string;
   }) => {
     setUploading(true);
     try {
@@ -143,7 +177,6 @@ export default function DashboardScreen() {
       });
 
       const storagePath = `${user?.id}/${Date.now()}-${params.name}`;
-
       const { Buffer } = require("buffer");
       const fileBuffer = Buffer.from(fileBase64, "base64");
 
@@ -157,6 +190,7 @@ export default function DashboardScreen() {
 
       const { error: dbError } = await supabase.from("documents").insert({
         user_id: user?.id,
+        folder_id: params.folderId,
         name: params.name,
         size_bytes: params.size ?? fileBuffer.length,
         mime_type: params.mimeType,
@@ -166,21 +200,61 @@ export default function DashboardScreen() {
 
       if (dbError) throw dbError;
 
-      Alert.alert("Success", "File uploaded into the vault.");
-      fetchDocuments();
+      Alert.alert("Success", "File uploaded into selected folder.");
+      fetchDocumentsCount();
     } catch (err: any) {
-      console.error(err);
       Alert.alert("Error Uploading", err.message || "Something went wrong");
     } finally {
       setUploading(false);
     }
   };
 
-  const handleUploadFromFiles = async () => {
+  const handleUploadFromFiles = async (folderId: string) => {
+    if (documentPickerBusy || mediaPickerBusy || pickerLockRef.current) return;
+
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        copyToCacheDirectory: true,
+      if (globalDocumentPickerActive) {
+        Alert.alert("Please wait", "Another file picker is already open.");
+        return;
+      }
+
+      pickerLockRef.current = true;
+      setDocumentPickerBusy(true);
+
+      await new Promise<void>((resolve) => {
+        InteractionManager.runAfterInteractions(() => resolve());
       });
+      await new Promise((resolve) => setTimeout(resolve, 700));
+
+      let result: DocumentPicker.DocumentPickerResult | null = null;
+
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          globalDocumentPickerActive = true;
+          result = await DocumentPicker.getDocumentAsync({
+            copyToCacheDirectory: true,
+          });
+          break;
+        } catch (err: any) {
+          const message = String(err?.message || "").toLowerCase();
+          const isPickerOverlap = message.includes("picking in progress");
+
+          if (!isPickerOverlap || attempt === 4) {
+            throw err;
+          }
+
+          await new Promise((resolve) =>
+            setTimeout(resolve, 500 + attempt * 250),
+          );
+        } finally {
+          globalDocumentPickerActive = false;
+        }
+      }
+
+      if (!result) {
+        Alert.alert("Error Uploading", "Could not open document picker.");
+        return;
+      }
 
       if (result.canceled) return;
 
@@ -190,15 +264,31 @@ export default function DashboardScreen() {
         name: file.name,
         mimeType: file.mimeType || "application/octet-stream",
         size: file.size,
+        folderId,
       });
     } catch (err: any) {
-      console.error(err);
       Alert.alert("Error Uploading", err.message || "Something went wrong");
+    } finally {
+      pickerLockRef.current = false;
+      setDocumentPickerBusy(false);
     }
   };
 
-  const handleUploadFromGallery = async () => {
+  const handleUploadFromGallery = async (folderId: string) => {
+    if (mediaPickerBusy || documentPickerBusy || globalMediaPickerActive) {
+      Alert.alert("Please wait", "Another picker is still closing.");
+      return;
+    }
+
     try {
+      setMediaPickerBusy(true);
+      globalMediaPickerActive = true;
+
+      await new Promise<void>((resolve) => {
+        InteractionManager.runAfterInteractions(() => resolve());
+      });
+      await new Promise((resolve) => setTimeout(resolve, 350));
+
       const permission =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
@@ -225,21 +315,31 @@ export default function DashboardScreen() {
         name,
         mimeType: image.mimeType || "image/jpeg",
         size: image.fileSize,
+        folderId,
       });
     } catch (err: any) {
       Alert.alert("Error", err?.message || "Failed to open gallery");
+    } finally {
+      globalMediaPickerActive = false;
+      setMediaPickerBusy(false);
     }
   };
 
-  const handleUploadPress = () => {
-    Alert.alert("Upload Document", "Choose source", [
-      { text: "Choose from Files", onPress: handleUploadFromFiles },
-      { text: "Choose from Gallery", onPress: handleUploadFromGallery },
-      { text: "Cancel", style: "cancel" },
-    ]);
-  };
   const handleScanDocument = async () => {
+    if (mediaPickerBusy || documentPickerBusy || globalMediaPickerActive) {
+      Alert.alert("Please wait", "Another picker is still closing.");
+      return;
+    }
+
     try {
+      setMediaPickerBusy(true);
+      globalMediaPickerActive = true;
+
+      await new Promise<void>((resolve) => {
+        InteractionManager.runAfterInteractions(() => resolve());
+      });
+      await new Promise((resolve) => setTimeout(resolve, 350));
+
       const permissionResult =
         await ImagePicker.requestCameraPermissionsAsync();
       if (!permissionResult.granted) {
@@ -255,24 +355,30 @@ export default function DashboardScreen() {
         quality: 0.8,
       });
 
-      if (!result.canceled) {
+      if (!result.canceled && result.assets?.length) {
         setScannedImageUri(result.assets[0].uri);
         setScanModalVisible(true);
       }
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to open camera");
+    } finally {
+      globalMediaPickerActive = false;
+      setMediaPickerBusy(false);
     }
   };
 
   const handleSaveScannedDoc = async () => {
-    if (!scannedImageUri || !scannedFileName) {
+    if (!scannedImageUri || !scannedFileName.trim()) {
       Alert.alert("Required", "Please enter a file name");
+      return;
+    }
+    if (!activeDestinationFolderId) {
+      Alert.alert("Folder Required", "Choose a destination folder first.");
       return;
     }
 
     setUploading(true);
     try {
-      // Convert Image to PDF
       const html = `<html><body style="margin:0;padding:0;display:flex;justify-content:center;align-items:center;height:100vh;"><img src="${scannedImageUri}" style="max-width:100%;max-height:100%;object-fit:contain;"/></body></html>`;
       const { uri: pdfUri } = await Print.printToFileAsync({ html });
 
@@ -285,7 +391,6 @@ export default function DashboardScreen() {
         ? scannedFileName
         : `${scannedFileName}.pdf`;
       const storagePath = `${user?.id}/${Date.now()}-${fileName}`;
-
       const { Buffer } = require("buffer");
       const fileBuffer = Buffer.from(fileBase64, "base64");
 
@@ -297,8 +402,9 @@ export default function DashboardScreen() {
 
       const { error: dbError } = await supabase.from("documents").insert({
         user_id: user?.id,
+        folder_id: activeDestinationFolderId,
         name: fileName,
-        size_bytes: fileBase64.length * 0.75, // approximate
+        size_bytes: fileBase64.length * 0.75,
         mime_type: "application/pdf",
         storage_path: storagePath,
         is_encrypted: false,
@@ -310,9 +416,9 @@ export default function DashboardScreen() {
       setScanModalVisible(false);
       setScannedFileName("");
       setScannedImageUri(null);
-      fetchDocuments();
+      fetchDocumentsCount();
     } catch (err: any) {
-      Alert.alert("Error", err.message);
+      Alert.alert("Error", err.message || "Could not save scan");
     } finally {
       setUploading(false);
     }
@@ -323,6 +429,11 @@ export default function DashboardScreen() {
       Alert.alert("Required", "Title and content cannot be empty.");
       return;
     }
+    if (!activeDestinationFolderId) {
+      Alert.alert("Folder Required", "Choose a destination folder first.");
+      return;
+    }
+
     setUploading(true);
     try {
       const fileName = noteTitle.endsWith(".txt")
@@ -340,6 +451,7 @@ export default function DashboardScreen() {
 
       const { error: dbError } = await supabase.from("documents").insert({
         user_id: user?.id,
+        folder_id: activeDestinationFolderId,
         name: fileName,
         size_bytes: Buffer.byteLength(noteContent, "utf8"),
         mime_type: "text/plain",
@@ -353,94 +465,155 @@ export default function DashboardScreen() {
       setNoteModalVisible(false);
       setNoteTitle("");
       setNoteContent("");
-      fetchDocuments();
+      fetchDocumentsCount();
     } catch (err: any) {
-      Alert.alert("Error", err.message);
+      Alert.alert("Error", err.message || "Could not save note");
     } finally {
       setUploading(false);
     }
   };
 
-  const handleDocumentPress = (doc: any) => {
-    setSelectedDocument(doc);
-    setPinModalVisible(true);
-  };
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) {
+      Alert.alert("Required", "Folder name is required.");
+      return;
+    }
 
-  const verifyAccessDocument = async () => {
-    if (enteredPin.length < 6) return Alert.alert("Error", "Enter 6-digit PIN");
-    if (!selectedDocument?.storage_path)
-      return Alert.alert("Error", "Document not found.");
+    if (!supportsNestedFolders && createParentId) {
+      Alert.alert(
+        "Schema Update Needed",
+        "Nested folders need folders.parent_id in your database. Run migration 03_nested_folders.sql and try again.",
+      );
+      return;
+    }
 
     try {
-      setUnlockingDocument(true);
+      setCreatingFolder(true);
+      const { error } = await supabase.from("folders").insert({
+        user_id: user?.id,
+        name: newFolderName.trim(),
+        ...(supportsNestedFolders && createParentId
+          ? { parent_id: createParentId }
+          : {}),
+      });
 
-      let security = profileSecurity;
-      if (!security && user?.id) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("master_salt, master_hash")
-          .eq("id", user.id)
-          .single();
+      if (error) throw error;
 
-        if (profile) {
-          security = profile;
-          setProfileSecurity(profile);
-        }
-      }
-
-      if (!security) return Alert.alert("Error", "Profile not found.");
-
-      const { authHash } = deriveMasterKey(enteredPin, security.master_salt);
-
-      if (authHash === security.master_hash) {
-        setPinModalVisible(false);
-        setEnteredPin("");
-
-        // Create a signed URL and download locally for reliable opening.
-        const { data } = await supabase.storage
-          .from("vault_documents")
-          .createSignedUrl(selectedDocument.storage_path, 300);
-
-        if (data?.signedUrl) {
-          if (!FileSystem.cacheDirectory) {
-            Alert.alert("Error", "Could not access local cache.");
-            return;
-          }
-
-          const safeName = (selectedDocument.name || "document")
-            .replace(/[^a-zA-Z0-9._-]/g, "_")
-            .trim();
-          const localUri = `${FileSystem.cacheDirectory}${Date.now()}-${safeName}`;
-
-          await FileSystem.downloadAsync(data.signedUrl, localUri);
-
-          const canShare = await Sharing.isAvailableAsync();
-          if (!canShare) {
-            Alert.alert("Opened", `Downloaded file to: ${localUri}`);
-            return;
-          }
-
-          await Sharing.shareAsync(localUri, {
-            dialogTitle: selectedDocument.name || "Open document",
-            mimeType: selectedDocument.mime_type || undefined,
-          });
-        } else {
-          Alert.alert("Error", "Could not generate link to view file.");
-        }
-      } else {
-        Alert.alert("Access Denied", "Incorrect Master PIN");
-      }
+      setFolderCreateVisible(false);
+      setNewFolderName("");
+      fetchFolders();
     } catch (err: any) {
-      Alert.alert("Error", err?.message || "Could not open document");
+      Alert.alert("Error", err?.message || "Could not create folder");
     } finally {
-      setUnlockingDocument(false);
+      setCreatingFolder(false);
     }
   };
+
+  const openFolderPicker = (action: PendingAction) => {
+    if (uploading || launchingAction || documentPickerBusy || mediaPickerBusy) {
+      return;
+    }
+
+    setPendingAction(action);
+    setPickerStack([]);
+    setActiveDestinationFolderId(null);
+    setFolderPickerVisible(true);
+  };
+
+  const executeActionForFolder = async (folderId: string) => {
+    if (!pendingAction) return;
+    if (
+      launchingAction ||
+      actionLockRef.current ||
+      documentPickerBusy ||
+      mediaPickerBusy
+    ) {
+      return;
+    }
+
+    actionLockRef.current = true;
+    const actionToRun = pendingAction;
+    setActiveDestinationFolderId(folderId);
+    setPendingAction(null);
+    setLaunchingAction(true);
+    setFolderPickerVisible(false);
+
+    try {
+      await new Promise<void>((resolve) => {
+        InteractionManager.runAfterInteractions(() => resolve());
+      });
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      setLaunchingAction(false);
+
+      if (actionToRun === "uploadFiles") {
+        await handleUploadFromFiles(folderId);
+      } else if (actionToRun === "uploadGallery") {
+        await handleUploadFromGallery(folderId);
+      } else if (actionToRun === "scan") {
+        await handleScanDocument();
+      } else if (actionToRun === "note") {
+        setNoteModalVisible(true);
+      }
+    } finally {
+      actionLockRef.current = false;
+      setLaunchingAction(false);
+    }
+  };
+
+  const runPendingAction = async () => {
+    if (
+      launchingAction ||
+      actionLockRef.current ||
+      documentPickerBusy ||
+      mediaPickerBusy
+    ) {
+      return;
+    }
+
+    if (!pendingAction) {
+      setFolderPickerVisible(false);
+      return;
+    }
+
+    if (!currentPickerFolderId) {
+      Alert.alert("Folder Required", "Open a folder and select that location.");
+      return;
+    }
+
+    actionLockRef.current = true;
+    const actionToRun = pendingAction;
+    const folderId = currentPickerFolderId;
+    setActiveDestinationFolderId(folderId);
+    setLaunchingAction(true);
+    setPendingAction(null);
+    setFolderPickerVisible(false);
+
+    try {
+      await new Promise<void>((resolve) => {
+        InteractionManager.runAfterInteractions(() => resolve());
+      });
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      setLaunchingAction(false);
+
+      if (actionToRun === "uploadFiles") {
+        await handleUploadFromFiles(folderId);
+      } else if (actionToRun === "uploadGallery") {
+        await handleUploadFromGallery(folderId);
+      } else if (actionToRun === "scan") {
+        await handleScanDocument();
+      } else if (actionToRun === "note") {
+        setNoteModalVisible(true);
+      }
+    } finally {
+      actionLockRef.current = false;
+      setLaunchingAction(false);
+    }
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-[#F4F4F5]">
       <StatusBar style="dark" />
 
-      {/* Header */}
       <View className="flex-row justify-between items-end px-8 pt-6 pb-4">
         <View>
           <Text className="text-sm text-neutral-500 font-bold uppercase tracking-widest mb-1">
@@ -463,7 +636,6 @@ export default function DashboardScreen() {
         className="flex-1 px-6 pt-4"
         showsVerticalScrollIndicator={false}
       >
-        {/* Storage Bento Grid */}
         <View className="flex-row justify-between mb-4">
           <View className="w-[48%]">
             <TouchableOpacity
@@ -479,7 +651,7 @@ export default function DashboardScreen() {
                 </View>
                 <View>
                   <Text className="text-white text-3xl font-black mb-1">
-                    {recentFiles.length}
+                    {documentsCount}
                   </Text>
                   <Text className="text-neutral-400 font-bold text-sm">
                     Documents
@@ -492,31 +664,31 @@ export default function DashboardScreen() {
           <View className="w-[48%] flex-col justify-between">
             <View className="bg-white p-5 rounded-[28px] h-[85px] mb-2 justify-center border border-neutral-200 shadow-sm">
               <View className="flex-row items-center justify-between">
-                <Feather name="shield" size={22} color="#059669" />
-                <Text className="text-2xl font-black text-black">8</Text>
+                <Feather name="folder-plus" size={22} color="#059669" />
+                <Text className="text-2xl font-black text-black">
+                  {folders.length}
+                </Text>
               </View>
               <Text className="text-neutral-500 font-bold text-xs mt-1">
-                Secure Notes
+                Folders
               </Text>
             </View>
             <View className="bg-white p-5 rounded-[28px] h-[85px] justify-center border border-neutral-200 shadow-sm">
               <View className="flex-row items-center justify-between">
-                <Feather name="key" size={22} color="#4F46E5" />
-                <Text className="text-2xl font-black text-black">24</Text>
+                <Feather name="layers" size={22} color="#4F46E5" />
               </View>
               <Text className="text-neutral-500 font-bold text-xs mt-1">
-                Passwords
+                File Hub
               </Text>
             </View>
           </View>
         </View>
 
-        {/* Quick Actions (Floating Pill style) */}
-        <View className="bg-white rounded-full p-2 flex-row justify-between items-center mb-10 shadow-lg shadow-neutral-200/50 border border-neutral-100">
+        <View className="bg-white rounded-full p-2 flex-row justify-between items-center mb-8 shadow-lg shadow-neutral-200/50 border border-neutral-100">
           <TouchableOpacity
             className="flex-1 py-4 items-center rounded-full bg-neutral-100/50 flex-row justify-center mx-1"
-            onPress={handleUploadPress}
-            disabled={uploading}
+            onPress={() => openFolderPicker("uploadFiles")}
+            disabled={uploading || launchingAction || documentPickerBusy || mediaPickerBusy}
           >
             {uploading ? (
               <ActivityIndicator color="black" size="small" />
@@ -527,184 +699,348 @@ export default function DashboardScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             className="w-14 h-14 bg-black rounded-full items-center justify-center mx-1"
-            onPress={handleScanDocument}
+            onPress={() => openFolderPicker("scan")}
+            disabled={uploading || launchingAction || documentPickerBusy || mediaPickerBusy}
           >
             <Feather name="camera" size={24} color="white" />
           </TouchableOpacity>
           <TouchableOpacity
             className="flex-1 py-4 items-center rounded-full bg-neutral-100/50 flex-row justify-center mx-1"
-            onPress={() => setNoteModalVisible(true)}
+            onPress={() => openFolderPicker("note")}
+            disabled={uploading || launchingAction || documentPickerBusy || mediaPickerBusy}
           >
             <Feather name="edit-2" size={18} color="black" />
             <Text className="font-bold text-black ml-2">Note</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Recent Files List */}
-        <View>
-          <Text className="text-xl font-black text-black mb-6 px-2 tracking-tight">
-            Recent Activity
+        <View className="flex-row items-center justify-between mb-4 px-2">
+          <Text className="text-xl font-black text-black tracking-tight">
+            Recent Folders
           </Text>
+          <TouchableOpacity onPress={() => navigation.navigate("AllDocuments")}>
+            <Text className="text-black font-bold">See All</Text>
+          </TouchableOpacity>
         </View>
 
-        <View className="mb-20">
-          {recentFiles.slice(0, 3).map((file) => (
-            <TouchableOpacity
-              onPress={() => handleDocumentPress(file)}
-              key={file.id}
-              className="flex-row items-center p-4 bg-white rounded-[24px] mb-3 shadow-sm border border-neutral-100"
-            >
-              <View
-                className="w-14 h-14 rounded-2xl items-center justify-center mr-4"
-                style={{ backgroundColor: file.color + "15" }}
+        <View className="mb-4">
+          {recentFolders.length === 0 ? (
+            <View className="bg-white rounded-[24px] p-5 border border-neutral-100">
+              <Text className="text-black font-bold text-lg">
+                No folders yet
+              </Text>
+              <Text className="text-neutral-500 mt-1">
+                Create your first folder to start organizing files.
+              </Text>
+            </View>
+          ) : (
+            recentFolders.map((folder) => (
+              <TouchableOpacity
+                key={folder.id}
+                onPress={() => navigation.navigate("AllDocuments")}
+                className="flex-row items-center p-4 bg-white rounded-[24px] mb-3 shadow-sm border border-neutral-100"
               >
-                <Feather name={file.type as any} size={24} color={file.color} />
-              </View>
-              <View className="flex-1">
-                <Text
-                  className="text-black font-bold text-lg mb-1 tracking-tight"
-                  numberOfLines={1}
-                >
-                  {file.name}
-                </Text>
-                <View className="flex-row items-center">
-                  <Feather name="lock" size={12} color="#737373" />
-                  <Text className="text-neutral-500 font-bold text-xs ml-1">
-                    {file.size} • AES-256
+                <View className="w-14 h-14 rounded-2xl items-center justify-center mr-4 bg-[#18181B]">
+                  <Feather name="folder" size={24} color="white" />
+                </View>
+                <View className="flex-1">
+                  <Text
+                    className="text-black font-bold text-lg mb-1"
+                    numberOfLines={1}
+                  >
+                    {folder.name}
+                  </Text>
+                  <Text className="text-neutral-500 font-bold text-xs">
+                    Open in File Hub
                   </Text>
                 </View>
-              </View>
-              <View className="w-10 h-10 items-center justify-center bg-neutral-50 rounded-full">
-                <Feather name="chevron-right" size={20} color="black" />
-              </View>
-            </TouchableOpacity>
-          ))}
+                <View className="w-10 h-10 items-center justify-center bg-neutral-50 rounded-full">
+                  <Feather name="chevron-right" size={20} color="black" />
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
         </View>
 
-        {/* Pin Unlock Modal */}
-        <Modal visible={pinModalVisible} transparent animationType="slide">
-          <View className="flex-1 justify-center items-center bg-black/60">
-            <View className="bg-white p-6 rounded-[32px] w-[85%] items-center shadow-2xl">
-              <Feather name="lock" size={40} color="black" className="mb-4" />
-              <Text className="text-xl font-black text-black mb-2 text-center">
-                Unlock Document
-              </Text>
-              <Text className="text-neutral-500 text-center mb-6">
-                Enter your Master PIN to view.
-              </Text>
-              <TextInput
-                className="w-full bg-neutral-100 rounded-2xl p-4 text-center text-2xl font-black tracking-widest mb-6"
-                keyboardType="numeric"
-                secureTextEntry
-                maxLength={6}
-                value={enteredPin}
-                onChangeText={setEnteredPin}
-                placeholder="------"
-              />
-              <View className="flex-row w-full space-x-3 gap-2">
+        <View className="mb-20 flex-row gap-3">
+          <TouchableOpacity
+            className="flex-1 bg-black py-4 rounded-2xl items-center"
+            onPress={() => navigation.navigate("AllDocuments")}
+          >
+            <Text className="text-white font-bold">See All Folders</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            className="flex-1 bg-white py-4 rounded-2xl items-center border border-neutral-200"
+            onPress={() => {
+              setCreateParentId(null);
+              setFolderCreateVisible(true);
+            }}
+          >
+            <Text className="text-black font-bold">Create Folder</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+
+      <Modal visible={folderPickerVisible} transparent animationType="slide">
+        <View className="flex-1 justify-center items-center bg-black/60">
+          <View className="bg-white p-6 rounded-[32px] w-[90%] items-center shadow-2xl">
+            <Feather name="folder" size={40} color="black" className="mb-4" />
+            <Text className="text-xl font-black text-black mb-2 text-center">
+              Choose Destination Folder
+            </Text>
+            <Text className="text-neutral-500 text-center mb-4">
+              Current: {currentPickerFolderName}
+            </Text>
+
+            <ScrollView className="w-full max-h-72 mb-4">
+              {pickerStack.length > 0 ? (
                 <TouchableOpacity
-                  className="flex-1 bg-neutral-200 py-4 rounded-xl items-center"
+                  className="w-full py-3 px-4 rounded-xl mb-2 bg-neutral-100 flex-row items-center"
                   onPress={() => {
-                    setPinModalVisible(false);
-                    setEnteredPin("");
+                    setPickerStack((prev) => prev.slice(0, -1));
                   }}
                 >
-                  <Text className="font-bold text-black">Cancel</Text>
+                  <Feather name="arrow-left" size={18} color="black" />
+                  <Text className="font-bold text-black ml-2">Back</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  className="flex-1 bg-black py-4 rounded-xl items-center"
-                  onPress={verifyAccessDocument}
-                  disabled={unlockingDocument}
+              ) : null}
+
+              {visiblePickerFolders.map((folder) => (
+                <View
+                  key={folder.id}
+                  className="w-full py-3 px-4 rounded-xl mb-2 bg-neutral-100 flex-row items-center justify-between"
                 >
-                  {unlockingDocument ? (
-                    <ActivityIndicator color="white" />
-                  ) : (
-                    <Text className="font-bold text-white">Unlock</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
+                  <TouchableOpacity
+                    className="flex-1"
+                    onPress={() => executeActionForFolder(folder.id)}
+                  >
+                    <Text className="font-bold text-black" numberOfLines={1}>
+                      {folder.name}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="pl-3"
+                    onPress={() =>
+                      setPickerStack((prev) => [
+                        ...prev,
+                        { id: folder.id, name: folder.name },
+                      ])
+                    }
+                  >
+                    <Feather name="chevron-right" size={18} color="black" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+
+            <View className="flex-row w-full gap-2">
+              <TouchableOpacity
+                className="flex-1 bg-neutral-200 py-4 rounded-xl items-center"
+                onPress={() => {
+                  setFolderPickerVisible(false);
+                  setPendingAction(null);
+                  setPickerStack([]);
+                  setActiveDestinationFolderId(null);
+                }}
+              >
+                <Text className="font-bold text-black">Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-1 bg-black py-4 rounded-xl items-center"
+                onPress={runPendingAction}
+                disabled={
+                  uploading ||
+                  launchingAction ||
+                  documentPickerBusy ||
+                  mediaPickerBusy
+                }
+              >
+                {uploading || launchingAction || documentPickerBusy || mediaPickerBusy ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text className="font-bold text-white">
+                    Select & Continue
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              className="mt-4"
+              onPress={() => {
+                setCreateParentId(currentPickerFolderId);
+                setFolderPickerVisible(false);
+                setFolderCreateVisible(true);
+              }}
+            >
+              <Text className="text-black font-bold">
+                Create New Folder Here
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={folderCreateVisible} transparent animationType="slide">
+        <View className="flex-1 justify-center items-center bg-black/60">
+          <View className="bg-white p-6 rounded-[32px] w-[85%] items-center shadow-2xl">
+            <Feather
+              name="folder-plus"
+              size={40}
+              color="black"
+              className="mb-4"
+            />
+            <Text className="text-xl font-black text-black mb-2 text-center">
+              Create Folder
+            </Text>
+            <Text className="text-neutral-500 text-center mb-4">
+              Parent:{" "}
+              {createParentId
+                ? folders.find((f) => f.id === createParentId)?.name || "Folder"
+                : "File Hub"}
+            </Text>
+            <TextInput
+              className="w-full bg-neutral-100 rounded-2xl p-4 text-left text-lg font-bold mb-6"
+              value={newFolderName}
+              onChangeText={setNewFolderName}
+              placeholder="Folder name"
+              placeholderTextColor="#737373"
+            />
+            <View className="flex-row w-full gap-2">
+              <TouchableOpacity
+                className="flex-1 bg-neutral-200 py-4 rounded-xl items-center"
+                onPress={() => {
+                  setFolderCreateVisible(false);
+                  setNewFolderName("");
+                }}
+              >
+                <Text className="font-bold text-black">Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-1 bg-black py-4 rounded-xl items-center"
+                onPress={handleCreateFolder}
+                disabled={creatingFolder}
+              >
+                {creatingFolder ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text className="font-bold text-white">Create</Text>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
-        </Modal>
+        </View>
+      </Modal>
 
-        {/* Note Creation Modal */}
-        <Modal visible={noteModalVisible} transparent animationType="slide">
-          <View className="flex-1 justify-end bg-black/40">
-            <View className="bg-white pt-6 px-6 pb-10 rounded-t-[32px] h-[80%]">
-              <View className="flex-row justify-between items-center mb-6">
-                <Text className="text-2xl font-black text-black">
-                  Secure Note
-                </Text>
-                <TouchableOpacity onPress={() => setNoteModalVisible(false)}>
-                  <Feather name="x" size={24} color="black" />
-                </TouchableOpacity>
-              </View>
-              <TextInput
-                className="text-xl font-bold bg-neutral-100 p-4 rounded-xl mb-4"
-                placeholderTextColor={"gray"}
-                placeholder="Note Title"
-                value={noteTitle}
-                onChangeText={setNoteTitle}
-              />
-              <TextInput
-                className="flex-1 text-black bg-neutral-100 p-4 rounded-xl mb-6 text-lg"
-                placeholderTextColor={"gray"}
-                placeholder="Write your notes here..."
-                multiline
-                textAlignVertical="top"
-                value={noteContent}
-                onChangeText={setNoteContent}
-              />
+      <Modal visible={noteModalVisible} transparent animationType="slide">
+        <View className="flex-1 justify-end bg-black/40">
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            keyboardVerticalOffset={24}
+            className="w-full"
+          >
+          <View className="bg-white pt-6 px-6 pb-10 rounded-t-[32px] h-[80%]">
+            <View className="flex-row justify-between items-center mb-6">
+              <Text className="text-2xl font-black text-black">
+                Secure Note
+              </Text>
               <TouchableOpacity
-                className="bg-black py-4 rounded-full items-center"
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setNoteModalVisible(false);
+                }}
+              >
+                <Feather name="x" size={24} color="black" />
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              className="text-xl font-bold bg-neutral-100 p-4 rounded-xl mb-4"
+              placeholderTextColor="gray"
+              placeholder="Note Title"
+              value={noteTitle}
+              onChangeText={setNoteTitle}
+            />
+            <TextInput
+              className="flex-1 text-black bg-neutral-100 p-4 rounded-xl mb-6 text-lg"
+              placeholderTextColor="gray"
+              placeholder="Write your notes here..."
+              multiline
+              returnKeyType="done"
+              blurOnSubmit
+              onSubmitEditing={Keyboard.dismiss}
+              textAlignVertical="top"
+              value={noteContent}
+              onChangeText={setNoteContent}
+            />
+            <View className="flex-row gap-2">
+              <TouchableOpacity
+                className="flex-1 bg-neutral-200 py-4 rounded-full items-center"
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setNoteModalVisible(false);
+                }}
+              >
+                <Text className="text-black font-bold text-lg">Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-1 bg-black py-4 rounded-full items-center"
                 onPress={handleCreateNote}
               >
                 <Text className="text-white font-bold text-lg">Save Note</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </Modal>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
 
-        {/* Scan Save Modal */}
-        <Modal visible={scanModalVisible} transparent animationType="fade">
-          <View className="flex-1 justify-center items-center bg-black/60">
-            <View className="bg-white p-6 rounded-[32px] w-[85%] items-center shadow-2xl">
-              <Feather
-                name="file-text"
-                size={40}
-                color="#4F46E5"
-                className="mb-4"
-              />
-              <Text className="text-xl font-black text-black mb-2 text-center">
-                Save Scanned Document
-              </Text>
-              <Text className="text-neutral-500 text-center mb-6">
-                Enter a name for your PDF document.
-              </Text>
-              <TextInput
-                className="w-full bg-neutral-100 rounded-2xl p-4 text-left text-lg font-bold mb-6"
-                value={scannedFileName}
-                onChangeText={setScannedFileName}
-                placeholder="e.g. Scan"
-              />
-              <View className="flex-row w-full space-x-3 gap-2">
-                <TouchableOpacity
-                  className="flex-1 bg-neutral-200 py-4 rounded-xl items-center"
-                  onPress={() => setScanModalVisible(false)}
-                >
-                  <Text className="font-bold text-black">Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  className="flex-1 bg-[#4F46E5] py-4 rounded-xl items-center"
-                  onPress={handleSaveScannedDoc}
-                >
+      <Modal visible={scanModalVisible} transparent animationType="fade">
+        <View className="flex-1 justify-center items-center bg-black/60">
+          <View className="bg-white p-6 rounded-[32px] w-[85%] items-center shadow-2xl">
+            <Feather
+              name="file-text"
+              size={40}
+              color="#4F46E5"
+              className="mb-4"
+            />
+            <Text className="text-xl font-black text-black mb-2 text-center">
+              Save Scanned Document
+            </Text>
+            <Text className="text-neutral-500 text-center mb-6">
+              Enter a name for your PDF document.
+            </Text>
+            <TextInput
+              className="w-full bg-neutral-100 rounded-2xl p-4 text-left text-lg font-bold mb-6"
+              value={scannedFileName}
+              onChangeText={setScannedFileName}
+              placeholder="e.g. Scan"
+            />
+            <View className="flex-row w-full gap-2">
+              <TouchableOpacity
+                className="flex-1 bg-neutral-200 py-4 rounded-xl items-center"
+                onPress={() => {
+                  setScanModalVisible(false);
+                  setScannedImageUri(null);
+                  setScannedFileName("");
+                }}
+              >
+                <Text className="font-bold text-black">Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-1 bg-[#4F46E5] py-4 rounded-xl items-center"
+                onPress={handleSaveScannedDoc}
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <ActivityIndicator color="white" />
+                ) : (
                   <Text className="font-bold text-white">Save PDF</Text>
-                </TouchableOpacity>
-              </View>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
-        </Modal>
-      </ScrollView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

@@ -1,8 +1,11 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   Text,
   TextInput,
@@ -13,22 +16,114 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
-import * as Sharing from "expo-sharing";
+import * as ImagePicker from "expo-image-picker";
+import * as Print from "expo-print";
 import { supabase } from "../services/supabase";
-import { deriveMasterKey } from "../services/encryption";
 import { useAuthStore } from "../stores/useAuthStore";
+
+type FolderNode = {
+  id: string;
+  name: string;
+  parent_id: string | null;
+  created_at?: string;
+};
+
+type DocumentNode = {
+  id: string;
+  folder_id: string | null;
+  name: string;
+  size: string;
+  mime_type: string | null;
+  storage_path: string;
+  type: string;
+  color: string;
+};
 
 export default function AllDocumentsScreen() {
   const navigation = useNavigation<any>();
   const user = useAuthStore((state) => state.user);
 
-  const [documents, setDocuments] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<DocumentNode[]>([]);
+  const [folders, setFolders] = useState<FolderNode[]>([]);
+  const [allFolders, setAllFolders] = useState<FolderNode[]>([]);
+
   const [loading, setLoading] = useState(false);
-  const [pinModalVisible, setPinModalVisible] = useState(false);
-  const [enteredPin, setEnteredPin] = useState("");
-  const [selectedDocument, setSelectedDocument] = useState<any>(null);
-  const [unlockingDocument, setUnlockingDocument] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [supportsNestedFolders, setSupportsNestedFolders] = useState(true);
+
+  const [folderStack, setFolderStack] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
+  const [folderSearch, setFolderSearch] = useState("");
+
+  const [folderModalVisible, setFolderModalVisible] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [creatingFolder, setCreatingFolder] = useState(false);
+
+  const [manageFoldersVisible, setManageFoldersVisible] = useState(false);
+  const [manageSearch, setManageSearch] = useState("");
+  const [folderRenameVisible, setFolderRenameVisible] = useState(false);
+  const [selectedFolderForRename, setSelectedFolderForRename] =
+    useState<FolderNode | null>(null);
+  const [folderRenameValue, setFolderRenameValue] = useState("");
+  const [renamingFolder, setRenamingFolder] = useState(false);
+
+  const [scanModalVisible, setScanModalVisible] = useState(false);
+  const [scannedImageUri, setScannedImageUri] = useState<string | null>(null);
+  const [scannedFileName, setScannedFileName] = useState("");
+  const [noteModalVisible, setNoteModalVisible] = useState(false);
+  const [noteTitle, setNoteTitle] = useState("");
+  const [noteContent, setNoteContent] = useState("");
+
+  const [documentActionVisible, setDocumentActionVisible] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState<DocumentNode | null>(
+    null,
+  );
+  const [deletingDocument, setDeletingDocument] = useState(false);
+
+  const [documentRenameVisible, setDocumentRenameVisible] = useState(false);
+  const [documentRenameValue, setDocumentRenameValue] = useState("");
+  const [renamingDocument, setRenamingDocument] = useState(false);
+
+  const [moveModalVisible, setMoveModalVisible] = useState(false);
+  const [moveStack, setMoveStack] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
+  const [movingDocument, setMovingDocument] = useState(false);
+
+  const currentFolderId = useMemo(
+    () => (folderStack.length ? folderStack[folderStack.length - 1].id : null),
+    [folderStack],
+  );
+
+  const currentFolderName = useMemo(
+    () =>
+      folderStack.length
+        ? folderStack[folderStack.length - 1].name
+        : "File Hub",
+    [folderStack],
+  );
+
+  const moveTargetFolderId = useMemo(
+    () => (moveStack.length ? moveStack[moveStack.length - 1].id : null),
+    [moveStack],
+  );
+
+  const moveTargetFolderName = useMemo(
+    () =>
+      moveStack.length ? moveStack[moveStack.length - 1].name : "File Hub",
+    [moveStack],
+  );
+
+  const visibleMoveFolders = useMemo(
+    () =>
+      allFolders.filter(
+        (folder) => (folder.parent_id || null) === moveTargetFolderId,
+      ),
+    [allFolders, moveTargetFolderId],
+  );
 
   const formatBytes = (bytes: number | null) => {
     if (!bytes) return "0 B";
@@ -40,32 +135,45 @@ export default function AllDocumentsScreen() {
 
   const getFileIconAndColor = (mimeType: string | null) => {
     if (!mimeType) return { type: "file", color: "#737373" };
-    if (mimeType.startsWith("image/")) return { type: "image", color: "#EA580C" };
-    if (mimeType === "application/pdf") return { type: "file-text", color: "#4F46E5" };
-    if (mimeType.includes("word") || mimeType.includes("text/")) return { type: "file-text", color: "#059669" };
+    if (mimeType.startsWith("image/"))
+      return { type: "image", color: "#EA580C" };
+    if (mimeType === "application/pdf")
+      return { type: "file-text", color: "#4F46E5" };
+    if (mimeType.includes("word") || mimeType.includes("text/")) {
+      return { type: "file-text", color: "#059669" };
+    }
     return { type: "file", color: "#4F46E5" };
   };
 
   const fetchAllDocuments = async () => {
     if (!user?.id) return;
+
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      let query = supabase
         .from("documents")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
+      if (currentFolderId) {
+        query = query.eq("folder_id", currentFolderId);
+      } else {
+        query = query.is("folder_id", null);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
 
       const formatted = (data || []).map((doc: any) => ({
         id: doc.id,
+        folder_id: doc.folder_id,
         name: doc.name,
         size: formatBytes(doc.size_bytes),
         mime_type: doc.mime_type,
         storage_path: doc.storage_path,
         ...getFileIconAndColor(doc.mime_type),
-      }));
+      })) as DocumentNode[];
 
       setDocuments(formatted);
     } catch (err: any) {
@@ -75,80 +183,538 @@ export default function AllDocumentsScreen() {
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchAllDocuments();
-    }, [user?.id]),
-  );
-
-  const handleDocumentPress = (doc: any) => {
-    setSelectedDocument(doc);
-    setPinModalVisible(true);
-  };
-
-  const verifyAccessDocument = async () => {
-    if (enteredPin.length < 6) return Alert.alert("Error", "Enter 6-digit PIN");
-    if (!selectedDocument?.storage_path) return Alert.alert("Error", "Document not found.");
+  const fetchFolders = async () => {
+    if (!user?.id) return;
 
     try {
-      setUnlockingDocument(true);
+      const { data, error } = await supabase
+        .from("folders")
+        .select("id, name, parent_id, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("master_salt, master_hash")
-        .eq("id", user?.id)
-        .single();
+      if (error) {
+        const missingParentColumn =
+          error.message?.toLowerCase().includes("parent_id") ||
+          error.code === "42703";
 
-      if (!profile) {
-        Alert.alert("Error", "Profile not found.");
+        if (!missingParentColumn) throw error;
+
+        setSupportsNestedFolders(false);
+
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from("folders")
+          .select("id, name, created_at")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+
+        if (fallbackError) throw fallbackError;
+
+        const normalized = ((fallbackData || []) as any[]).map((folder) => ({
+          id: folder.id,
+          name: folder.name,
+          parent_id: null,
+          created_at: folder.created_at,
+        })) as FolderNode[];
+
+        setFolders(
+          normalized.filter((folder) => (currentFolderId ? false : true)),
+        );
+        setAllFolders(normalized);
         return;
       }
 
-      const { authHash } = deriveMasterKey(enteredPin, profile.master_salt);
-      if (authHash !== profile.master_hash) {
-        Alert.alert("Access Denied", "Incorrect Master PIN");
-        return;
-      }
+      setSupportsNestedFolders(true);
+      const list = (data || []) as FolderNode[];
+      setAllFolders(list);
+      setFolders(
+        list.filter((folder) => (folder.parent_id || null) === currentFolderId),
+      );
+    } catch (err: any) {
+      Alert.alert("Error", err?.message || "Could not load folders");
+    }
+  };
 
-      setPinModalVisible(false);
-      setEnteredPin("");
+  useFocusEffect(
+    useCallback(() => {
+      fetchFolders();
+      fetchAllDocuments();
+    }, [user?.id, currentFolderId]),
+  );
 
-      const { data } = await supabase.storage
+  const filteredFoldersForView = useMemo(() => {
+    const q = folderSearch.trim().toLowerCase();
+    if (!q) return folders;
+    return folders.filter((folder) => folder.name.toLowerCase().includes(q));
+  }, [folderSearch, folders]);
+
+  const manageFoldersList = useMemo(() => {
+    const q = manageSearch.trim().toLowerCase();
+    if (!q) return allFolders;
+    return allFolders.filter((folder) => folder.name.toLowerCase().includes(q));
+  }, [allFolders, manageSearch]);
+
+  const uploadAssetToCurrentFolder = async (params: {
+    uri: string;
+    name: string;
+    mimeType: string;
+    size?: number | null;
+  }) => {
+    if (!currentFolderId) {
+      Alert.alert(
+        "Folder Required",
+        "Open a folder and upload inside that folder.",
+      );
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const fileBase64 = await FileSystem.readAsStringAsync(params.uri, {
+        // @ts-ignore
+        encoding: "base64",
+      });
+
+      const storagePath = `${user?.id}/${Date.now()}-${params.name}`;
+      const { Buffer } = require("buffer");
+      const fileBuffer = Buffer.from(fileBase64, "base64");
+
+      const { error: uploadError } = await supabase.storage
         .from("vault_documents")
-        .createSignedUrl(selectedDocument.storage_path, 300);
+        .upload(storagePath, fileBuffer, {
+          contentType: params.mimeType || "application/octet-stream",
+        });
 
-      if (!data?.signedUrl) {
-        Alert.alert("Error", "Could not generate link to view file.");
-        return;
-      }
+      if (uploadError) throw uploadError;
 
-      if (!FileSystem.cacheDirectory) {
-        Alert.alert("Error", "Could not access local cache.");
-        return;
-      }
+      const { error: dbError } = await supabase.from("documents").insert({
+        user_id: user?.id,
+        folder_id: currentFolderId,
+        name: params.name,
+        size_bytes: params.size ?? fileBuffer.length,
+        mime_type: params.mimeType,
+        storage_path: storagePath,
+        is_encrypted: false,
+      });
 
-      const safeName = (selectedDocument.name || "document")
-        .replace(/[^a-zA-Z0-9._-]/g, "_")
-        .trim();
-      const localUri = `${FileSystem.cacheDirectory}${Date.now()}-${safeName}`;
+      if (dbError) throw dbError;
 
-      await FileSystem.downloadAsync(data.signedUrl, localUri);
+      Alert.alert("Success", "Document uploaded.");
+      fetchAllDocuments();
+    } catch (err: any) {
+      Alert.alert("Error", err?.message || "Could not upload document");
+    } finally {
+      setUploading(false);
+    }
+  };
 
-      const canShare = await Sharing.isAvailableAsync();
-      if (!canShare) {
-        Alert.alert("Opened", `Downloaded file to: ${localUri}`);
-        return;
-      }
+  const handleUploadFromFiles = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled) return;
 
-      await Sharing.shareAsync(localUri, {
-        dialogTitle: selectedDocument.name || "Open document",
-        mimeType: selectedDocument.mime_type || undefined,
+      const file = result.assets[0];
+      await uploadAssetToCurrentFolder({
+        uri: file.uri,
+        name: file.name,
+        mimeType: file.mimeType || "application/octet-stream",
+        size: file.size,
       });
     } catch (err: any) {
-      Alert.alert("Error", err?.message || "Could not open document");
-    } finally {
-      setUnlockingDocument(false);
+      Alert.alert("Error", err?.message || "Could not pick file");
     }
+  };
+
+  const handleUploadFromGallery = async () => {
+    try {
+      const permission =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert("Permission Required", "Gallery access is needed.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 1,
+      });
+
+      if (result.canceled || !result.assets?.length) return;
+
+      const image = result.assets[0];
+      const fallbackExt = image.uri.split(".").pop() || "jpg";
+      const name = image.fileName || `gallery-${Date.now()}.${fallbackExt}`;
+
+      await uploadAssetToCurrentFolder({
+        uri: image.uri,
+        name,
+        mimeType: image.mimeType || "image/jpeg",
+        size: image.fileSize,
+      });
+    } catch (err: any) {
+      Alert.alert("Error", err?.message || "Could not pick image");
+    }
+  };
+
+  const handleUploadPress = () => {
+    Alert.alert("Upload Document", "Choose source", [
+      { text: "Choose from Files", onPress: handleUploadFromFiles },
+      { text: "Choose from Gallery", onPress: handleUploadFromGallery },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
+  const handleScanDocument = async () => {
+    if (!currentFolderId) {
+      Alert.alert(
+        "Folder Required",
+        "Open a folder and scan inside that folder.",
+      );
+      return;
+    }
+
+    try {
+      const permissionResult =
+        await ImagePicker.requestCameraPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert("Permission Required", "Camera access is needed.");
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (!result.canceled) {
+        setScannedImageUri(result.assets[0].uri);
+        setScanModalVisible(true);
+      }
+    } catch (err: any) {
+      Alert.alert("Error", err?.message || "Could not open camera");
+    }
+  };
+
+  const handleSaveScannedDoc = async () => {
+    if (!scannedImageUri || !scannedFileName.trim()) {
+      Alert.alert("Required", "Please enter a file name.");
+      return;
+    }
+    if (!currentFolderId) {
+      Alert.alert(
+        "Folder Required",
+        "Open a folder and scan inside that folder.",
+      );
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const html = `<html><body style="margin:0;padding:0;display:flex;justify-content:center;align-items:center;height:100vh;"><img src="${scannedImageUri}" style="max-width:100%;max-height:100%;object-fit:contain;"/></body></html>`;
+      const { uri: pdfUri } = await Print.printToFileAsync({ html });
+
+      const fileBase64 = await FileSystem.readAsStringAsync(pdfUri, {
+        // @ts-ignore
+        encoding: "base64",
+      });
+
+      const fileName = scannedFileName.endsWith(".pdf")
+        ? scannedFileName
+        : `${scannedFileName}.pdf`;
+      const storagePath = `${user?.id}/${Date.now()}-${fileName}`;
+      const { Buffer } = require("buffer");
+      const fileBuffer = Buffer.from(fileBase64, "base64");
+
+      const { error: uploadError } = await supabase.storage
+        .from("vault_documents")
+        .upload(storagePath, fileBuffer, { contentType: "application/pdf" });
+
+      if (uploadError) throw uploadError;
+
+      const { error: dbError } = await supabase.from("documents").insert({
+        user_id: user?.id,
+        folder_id: currentFolderId,
+        name: fileName,
+        size_bytes: fileBase64.length * 0.75,
+        mime_type: "application/pdf",
+        storage_path: storagePath,
+        is_encrypted: false,
+      });
+
+      if (dbError) throw dbError;
+
+      Alert.alert("Success", "Scanned document saved.");
+      setScanModalVisible(false);
+      setScannedFileName("");
+      setScannedImageUri(null);
+      fetchAllDocuments();
+    } catch (err: any) {
+      Alert.alert("Error", err?.message || "Could not save scanned document");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleCreateNote = async () => {
+    if (!noteTitle.trim() || !noteContent.trim()) {
+      Alert.alert("Required", "Title and content cannot be empty.");
+      return;
+    }
+    if (!currentFolderId) {
+      Alert.alert(
+        "Folder Required",
+        "Open a folder and save notes inside that folder.",
+      );
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const fileName = noteTitle.endsWith(".txt")
+        ? noteTitle
+        : `${noteTitle}.txt`;
+      const storagePath = `${user?.id}/${Date.now()}-${fileName}`;
+      const { Buffer } = require("buffer");
+      const fileBuffer = Buffer.from(noteContent, "utf-8");
+
+      const { error: uploadError } = await supabase.storage
+        .from("vault_documents")
+        .upload(storagePath, fileBuffer, { contentType: "text/plain" });
+
+      if (uploadError) throw uploadError;
+
+      const { error: dbError } = await supabase.from("documents").insert({
+        user_id: user?.id,
+        folder_id: currentFolderId,
+        name: fileName,
+        size_bytes: Buffer.byteLength(noteContent, "utf8"),
+        mime_type: "text/plain",
+        storage_path: storagePath,
+        is_encrypted: false,
+      });
+
+      if (dbError) throw dbError;
+
+      Alert.alert("Success", "Secure note saved.");
+      setNoteModalVisible(false);
+      setNoteTitle("");
+      setNoteContent("");
+      fetchAllDocuments();
+    } catch (err: any) {
+      Alert.alert("Error", err?.message || "Could not save note");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDocumentPress = (doc: DocumentNode) => {
+    setSelectedDocument(doc);
+    setDocumentActionVisible(true);
+  };
+
+  const handleDeleteDocument = async () => {
+    if (!selectedDocument?.id) return;
+
+    try {
+      setDeletingDocument(true);
+
+      if (selectedDocument.storage_path) {
+        await supabase.storage
+          .from("vault_documents")
+          .remove([selectedDocument.storage_path]);
+      }
+
+      const { error } = await supabase
+        .from("documents")
+        .delete()
+        .eq("id", selectedDocument.id)
+        .eq("user_id", user?.id);
+
+      if (error) throw error;
+
+      setDocumentActionVisible(false);
+      setSelectedDocument(null);
+      fetchAllDocuments();
+      Alert.alert("Deleted", "Document removed.");
+    } catch (err: any) {
+      Alert.alert("Error", err?.message || "Could not delete document");
+    } finally {
+      setDeletingDocument(false);
+    }
+  };
+
+  const openRenameDocument = () => {
+    if (!selectedDocument) return;
+    setDocumentRenameValue(selectedDocument.name);
+    setDocumentActionVisible(false);
+    setDocumentRenameVisible(true);
+  };
+
+  const handleRenameDocument = async () => {
+    if (!selectedDocument?.id || !documentRenameValue.trim()) {
+      Alert.alert("Required", "Document name is required.");
+      return;
+    }
+
+    try {
+      setRenamingDocument(true);
+      const { error } = await supabase
+        .from("documents")
+        .update({ name: documentRenameValue.trim() })
+        .eq("id", selectedDocument.id)
+        .eq("user_id", user?.id);
+
+      if (error) throw error;
+
+      setDocumentRenameVisible(false);
+      setSelectedDocument(null);
+      fetchAllDocuments();
+      Alert.alert("Renamed", "Document renamed successfully.");
+    } catch (err: any) {
+      Alert.alert("Error", err?.message || "Could not rename document");
+    } finally {
+      setRenamingDocument(false);
+    }
+  };
+
+  const openMoveModal = () => {
+    if (!selectedDocument) return;
+    setMoveStack([]);
+    setDocumentActionVisible(false);
+    setMoveModalVisible(true);
+  };
+
+  const handleMoveDocument = async () => {
+    if (!selectedDocument?.id) return;
+    if (!moveTargetFolderId) {
+      Alert.alert("Folder Required", "Open the destination folder first.");
+      return;
+    }
+
+    if (selectedDocument.folder_id === moveTargetFolderId) {
+      Alert.alert("No Change", "Document is already in this folder.");
+      return;
+    }
+
+    try {
+      setMovingDocument(true);
+      const { error } = await supabase
+        .from("documents")
+        .update({ folder_id: moveTargetFolderId })
+        .eq("id", selectedDocument.id)
+        .eq("user_id", user?.id);
+
+      if (error) throw error;
+
+      setMoveModalVisible(false);
+      setSelectedDocument(null);
+      fetchAllDocuments();
+      Alert.alert("Moved", "Document moved successfully.");
+    } catch (err: any) {
+      Alert.alert("Error", err?.message || "Could not move document");
+    } finally {
+      setMovingDocument(false);
+    }
+  };
+
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) {
+      Alert.alert("Required", "Folder name is required.");
+      return;
+    }
+
+    if (!supportsNestedFolders && currentFolderId) {
+      Alert.alert(
+        "Schema Update Needed",
+        "Nested folders need folders.parent_id in your database. Run migration 03_nested_folders.sql and try again.",
+      );
+      return;
+    }
+
+    try {
+      setCreatingFolder(true);
+      const { error } = await supabase.from("folders").insert({
+        user_id: user?.id,
+        name: newFolderName.trim(),
+        ...(supportsNestedFolders && currentFolderId
+          ? { parent_id: currentFolderId }
+          : {}),
+      });
+
+      if (error) throw error;
+
+      setFolderModalVisible(false);
+      setNewFolderName("");
+      fetchFolders();
+    } catch (err: any) {
+      Alert.alert("Error", err?.message || "Could not create folder");
+    } finally {
+      setCreatingFolder(false);
+    }
+  };
+
+  const openFolderRename = (folder: FolderNode) => {
+    setSelectedFolderForRename(folder);
+    setFolderRenameValue(folder.name);
+    setFolderRenameVisible(true);
+  };
+
+  const handleRenameFolder = async () => {
+    if (!selectedFolderForRename?.id || !folderRenameValue.trim()) {
+      Alert.alert("Required", "Folder name is required.");
+      return;
+    }
+
+    try {
+      setRenamingFolder(true);
+      const { error } = await supabase
+        .from("folders")
+        .update({ name: folderRenameValue.trim() })
+        .eq("id", selectedFolderForRename.id)
+        .eq("user_id", user?.id);
+
+      if (error) throw error;
+
+      setFolderRenameVisible(false);
+      setSelectedFolderForRename(null);
+      fetchFolders();
+      Alert.alert("Renamed", "Folder renamed successfully.");
+    } catch (err: any) {
+      Alert.alert("Error", err?.message || "Could not rename folder");
+    } finally {
+      setRenamingFolder(false);
+    }
+  };
+
+  const handleDeleteFolder = async (folder: FolderNode) => {
+    Alert.alert(
+      "Delete Folder",
+      `Delete ${folder.name}? Child folders will also be removed and documents will move out of deleted folders.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from("folders")
+                .delete()
+                .eq("id", folder.id)
+                .eq("user_id", user?.id);
+
+              if (error) throw error;
+
+              fetchFolders();
+              fetchAllDocuments();
+            } catch (err: any) {
+              Alert.alert("Error", err?.message || "Could not delete folder");
+            }
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -162,22 +728,153 @@ export default function AllDocumentsScreen() {
         >
           <Feather name="arrow-left" size={20} color="black" />
         </TouchableOpacity>
-        <Text className="text-2xl font-black text-black">All Documents</Text>
-        <View className="w-11 h-11" />
+        <Text className="text-2xl font-black text-black" numberOfLines={1}>
+          {currentFolderName}
+        </Text>
+        {currentFolderId ? (
+          <TouchableOpacity
+            onPress={() => setFolderModalVisible(true)}
+            className="w-11 h-11 bg-white rounded-full items-center justify-center border border-neutral-200"
+          >
+            <Feather name="folder-plus" size={18} color="black" />
+          </TouchableOpacity>
+        ) : (
+          <View className="w-11 h-11" />
+        )}
       </View>
 
-      <ScrollView className="flex-1 px-6 pt-4" showsVerticalScrollIndicator={false}>
+      {currentFolderId ? (
+        <View className="px-6 pb-2">
+          <View className="bg-white rounded-full p-2 flex-row justify-between items-center shadow-lg shadow-neutral-200/50 border border-neutral-100">
+            <TouchableOpacity
+              className="flex-1 py-4 items-center rounded-full bg-neutral-100/50 flex-row justify-center mx-1"
+              onPress={handleUploadPress}
+              disabled={uploading}
+            >
+              {uploading ? (
+                <ActivityIndicator color="black" size="small" />
+              ) : (
+                <Feather name="upload" size={18} color="black" />
+              )}
+              <Text className="font-bold text-black ml-2">Upload</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="w-14 h-14 bg-black rounded-full items-center justify-center mx-1"
+              onPress={handleScanDocument}
+            >
+              <Feather name="camera" size={24} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="flex-1 py-4 items-center rounded-full bg-neutral-100/50 flex-row justify-center mx-1"
+              onPress={() => setNoteModalVisible(true)}
+            >
+              <Feather name="edit-2" size={18} color="black" />
+              <Text className="font-bold text-black ml-2">Note</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
+
+      {currentFolderId === null ? (
+        <View className="px-6 pb-2">
+          <View className="bg-white rounded-[24px] p-4 border border-neutral-100">
+            <TextInput
+              className="bg-neutral-100 rounded-xl px-4 py-3 font-bold text-black"
+              placeholder="Search folders"
+              placeholderTextColor="#737373"
+              value={folderSearch}
+              onChangeText={setFolderSearch}
+            />
+            <View className="flex-row gap-2 mt-3">
+              <TouchableOpacity
+                className="flex-1 bg-black py-3 rounded-xl items-center"
+                onPress={() => setFolderModalVisible(true)}
+              >
+                <Text className="text-white font-bold">Create Folder</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-1 bg-neutral-200 py-3 rounded-xl items-center"
+                onPress={() => setManageFoldersVisible(true)}
+              >
+                <Text className="text-black font-bold">Manage Folders</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      ) : null}
+
+      <ScrollView
+        className="flex-1 px-6 pt-2"
+        showsVerticalScrollIndicator={false}
+      >
         {loading ? (
           <View className="items-center justify-center py-12">
             <ActivityIndicator color="black" />
           </View>
-        ) : documents.length === 0 ? (
+        ) : filteredFoldersForView.length === 0 && documents.length === 0 ? (
           <View className="bg-white rounded-[24px] p-6 border border-neutral-100">
-            <Text className="text-black font-bold text-lg">No documents yet</Text>
-            <Text className="text-neutral-500 mt-1">Upload, scan, or create a note from Dashboard.</Text>
+            <Text className="text-black font-bold text-lg">
+              Nothing here yet
+            </Text>
+            <Text className="text-neutral-500 mt-1">
+              Create folders, upload documents, or scan directly inside this
+              folder.
+            </Text>
           </View>
         ) : (
           <View className="pb-12">
+            {currentFolderId ? (
+              <TouchableOpacity
+                onPress={() => setFolderStack((prev) => prev.slice(0, -1))}
+                className="flex-row items-center p-4 bg-white rounded-[24px] mb-3 shadow-sm border border-neutral-100"
+              >
+                <View className="w-14 h-14 rounded-2xl items-center justify-center mr-4 bg-neutral-100">
+                  <Feather name="arrow-up-left" size={24} color="black" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-black font-bold text-lg mb-1">
+                    Back
+                  </Text>
+                  <Text className="text-neutral-500 font-bold text-xs">
+                    {folderStack.length === 1
+                      ? "Go back to File Hub"
+                      : "Go to parent folder"}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ) : null}
+
+            {filteredFoldersForView.map((folder) => (
+              <TouchableOpacity
+                onPress={() =>
+                  setFolderStack((prev) => [
+                    ...prev,
+                    { id: folder.id, name: folder.name },
+                  ])
+                }
+                key={folder.id}
+                className="flex-row items-center p-4 bg-white rounded-[24px] mb-3 shadow-sm border border-neutral-100"
+              >
+                <View className="w-14 h-14 rounded-2xl items-center justify-center mr-4 bg-[#18181B]">
+                  <Feather name="folder" size={24} color="white" />
+                </View>
+                <View className="flex-1">
+                  <Text
+                    className="text-black font-bold text-lg mb-1"
+                    numberOfLines={1}
+                  >
+                    {folder.name}
+                  </Text>
+                  <Text className="text-neutral-500 font-bold text-xs">
+                    Folder
+                  </Text>
+                </View>
+                <View className="w-10 h-10 items-center justify-center bg-neutral-50 rounded-full">
+                  <Feather name="chevron-right" size={20} color="black" />
+                </View>
+              </TouchableOpacity>
+            ))}
+
             {documents.map((file) => (
               <TouchableOpacity
                 onPress={() => handleDocumentPress(file)}
@@ -188,13 +885,22 @@ export default function AllDocumentsScreen() {
                   className="w-14 h-14 rounded-2xl items-center justify-center mr-4"
                   style={{ backgroundColor: file.color + "15" }}
                 >
-                  <Feather name={file.type as any} size={24} color={file.color} />
+                  <Feather
+                    name={file.type as any}
+                    size={24}
+                    color={file.color}
+                  />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-black font-bold text-lg mb-1" numberOfLines={1}>
+                  <Text
+                    className="text-black font-bold text-lg mb-1"
+                    numberOfLines={1}
+                  >
                     {file.name}
                   </Text>
-                  <Text className="text-neutral-500 font-bold text-xs">{file.size}</Text>
+                  <Text className="text-neutral-500 font-bold text-xs">
+                    {file.size}
+                  </Text>
                 </View>
                 <View className="w-10 h-10 items-center justify-center bg-neutral-50 rounded-full">
                   <Feather name="chevron-right" size={20} color="black" />
@@ -205,44 +911,412 @@ export default function AllDocumentsScreen() {
         )}
       </ScrollView>
 
-      <Modal visible={pinModalVisible} transparent animationType="slide">
+      <Modal visible={folderModalVisible} transparent animationType="slide">
         <View className="flex-1 justify-center items-center bg-black/60">
           <View className="bg-white p-6 rounded-[32px] w-[85%] items-center shadow-2xl">
-            <Feather name="lock" size={40} color="black" className="mb-4" />
-            <Text className="text-xl font-black text-black mb-2 text-center">Unlock Document</Text>
-            <Text className="text-neutral-500 text-center mb-6">Enter your Master PIN to view.</Text>
-            <TextInput
-              className="w-full bg-neutral-100 rounded-2xl p-4 text-center text-2xl font-black tracking-widest mb-6"
-              keyboardType="numeric"
-              secureTextEntry
-              maxLength={6}
-              value={enteredPin}
-              onChangeText={setEnteredPin}
-              placeholder="------"
+            <Feather
+              name="folder-plus"
+              size={40}
+              color="black"
+              className="mb-4"
             />
-            <View className="flex-row w-full space-x-3 gap-2">
+            <Text className="text-xl font-black text-black mb-2 text-center">
+              Create Folder
+            </Text>
+            <Text className="text-neutral-500 text-center mb-4">
+              Parent: {currentFolderName}
+            </Text>
+            <TextInput
+              className="w-full bg-neutral-100 rounded-2xl p-4 text-left text-lg font-bold mb-6"
+              value={newFolderName}
+              onChangeText={setNewFolderName}
+              placeholder="Folder name"
+              placeholderTextColor="#737373"
+            />
+            <View className="flex-row w-full gap-2">
               <TouchableOpacity
                 className="flex-1 bg-neutral-200 py-4 rounded-xl items-center"
                 onPress={() => {
-                  setPinModalVisible(false);
-                  setEnteredPin("");
+                  setFolderModalVisible(false);
+                  setNewFolderName("");
                 }}
               >
                 <Text className="font-bold text-black">Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 className="flex-1 bg-black py-4 rounded-xl items-center"
-                onPress={verifyAccessDocument}
-                disabled={unlockingDocument}
+                onPress={handleCreateFolder}
+                disabled={creatingFolder}
               >
-                {unlockingDocument ? (
+                {creatingFolder ? (
                   <ActivityIndicator color="white" />
                 ) : (
-                  <Text className="font-bold text-white">Unlock</Text>
+                  <Text className="font-bold text-white">Create</Text>
                 )}
               </TouchableOpacity>
             </View>
           </View>
+        </View>
+      </Modal>
+
+      <Modal visible={manageFoldersVisible} transparent animationType="slide">
+        <View className="flex-1 justify-end bg-black/40">
+          <View className="bg-white pt-6 px-6 pb-8 rounded-t-[32px] h-[78%]">
+            <View className="flex-row items-center justify-between mb-4">
+              <Text className="text-2xl font-black text-black">
+                Manage Folders
+              </Text>
+              <TouchableOpacity onPress={() => setManageFoldersVisible(false)}>
+                <Feather name="x" size={22} color="black" />
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              className="bg-neutral-100 rounded-xl px-4 py-3 font-bold text-black mb-4"
+              placeholder="Search folders"
+              placeholderTextColor="#737373"
+              value={manageSearch}
+              onChangeText={setManageSearch}
+            />
+
+            <ScrollView>
+              {manageFoldersList.map((folder) => (
+                <View
+                  key={folder.id}
+                  className="flex-row items-center p-4 bg-neutral-50 rounded-[18px] mb-3 border border-neutral-200"
+                >
+                  <View className="flex-1">
+                    <Text
+                      className="font-bold text-black text-base"
+                      numberOfLines={1}
+                    >
+                      {folder.name}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    className="px-3 py-2 rounded-lg bg-white border border-neutral-200 mr-2"
+                    onPress={() => openFolderRename(folder)}
+                  >
+                    <Text className="font-bold text-black">Rename</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="px-3 py-2 rounded-lg bg-red-600"
+                    onPress={() => handleDeleteFolder(folder)}
+                  >
+                    <Text className="font-bold text-white">Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={folderRenameVisible} transparent animationType="slide">
+        <View className="flex-1 justify-center items-center bg-black/60">
+          <View className="bg-white p-6 rounded-[28px] w-[85%] items-center shadow-2xl">
+            <Text className="text-xl font-black text-black mb-4">
+              Rename Folder
+            </Text>
+            <TextInput
+              className="w-full bg-neutral-100 rounded-2xl p-4 text-left text-lg font-bold mb-6"
+              value={folderRenameValue}
+              onChangeText={setFolderRenameValue}
+              placeholder="Folder name"
+            />
+            <View className="flex-row w-full gap-2">
+              <TouchableOpacity
+                className="flex-1 bg-neutral-200 py-4 rounded-xl items-center"
+                onPress={() => setFolderRenameVisible(false)}
+              >
+                <Text className="font-bold text-black">Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-1 bg-black py-4 rounded-xl items-center"
+                onPress={handleRenameFolder}
+                disabled={renamingFolder}
+              >
+                {renamingFolder ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text className="font-bold text-white">Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={documentActionVisible} transparent animationType="slide">
+        <View className="flex-1 justify-end bg-black/40">
+          <View className="bg-white pt-6 px-6 pb-10 rounded-t-[32px]">
+            <View className="flex-row items-center justify-between mb-2">
+              <Text className="text-2xl font-black text-black">
+                Document Options
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setDocumentActionVisible(false);
+                  setSelectedDocument(null);
+                }}
+              >
+                <Feather name="x" size={22} color="black" />
+              </TouchableOpacity>
+            </View>
+            <Text className="text-neutral-500 mb-6" numberOfLines={1}>
+              {selectedDocument?.name || ""}
+            </Text>
+
+            <TouchableOpacity
+              className="bg-neutral-100 py-4 rounded-xl items-center mb-3"
+              onPress={openRenameDocument}
+            >
+              <Text className="font-bold text-black">Rename</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              className="bg-neutral-100 py-4 rounded-xl items-center mb-3"
+              onPress={openMoveModal}
+            >
+              <Text className="font-bold text-black">Move to Folder</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              className="bg-neutral-100 py-4 rounded-xl items-center mb-3"
+              onPress={() =>
+                Alert.alert("Coming Soon", "View option will be enabled later.")
+              }
+            >
+              <Text className="font-bold text-black">View</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              className="bg-red-600 py-4 rounded-xl items-center mb-3"
+              onPress={handleDeleteDocument}
+              disabled={deletingDocument}
+            >
+              {deletingDocument ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text className="font-bold text-white">Delete</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={documentRenameVisible} transparent animationType="slide">
+        <View className="flex-1 justify-center items-center bg-black/60">
+          <View className="bg-white p-6 rounded-[28px] w-[85%] items-center shadow-2xl">
+            <Text className="text-xl font-black text-black mb-4">
+              Rename Document
+            </Text>
+            <TextInput
+              className="w-full bg-neutral-100 rounded-2xl p-4 text-left text-lg font-bold mb-6"
+              value={documentRenameValue}
+              onChangeText={setDocumentRenameValue}
+              placeholder="Document name"
+            />
+            <View className="flex-row w-full gap-2">
+              <TouchableOpacity
+                className="flex-1 bg-neutral-200 py-4 rounded-xl items-center"
+                onPress={() => setDocumentRenameVisible(false)}
+              >
+                <Text className="font-bold text-black">Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-1 bg-black py-4 rounded-xl items-center"
+                onPress={handleRenameDocument}
+                disabled={renamingDocument}
+              >
+                {renamingDocument ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text className="font-bold text-white">Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={moveModalVisible} transparent animationType="slide">
+        <View className="flex-1 justify-center items-center bg-black/60">
+          <View className="bg-white p-6 rounded-[32px] w-[90%] items-center shadow-2xl">
+            <Feather name="folder" size={40} color="black" className="mb-4" />
+            <Text className="text-xl font-black text-black mb-2 text-center">
+              Move to Folder
+            </Text>
+            <Text className="text-neutral-500 text-center mb-4">
+              Current destination: {moveTargetFolderName}
+            </Text>
+
+            <ScrollView className="w-full max-h-72 mb-4">
+              {moveStack.length > 0 ? (
+                <TouchableOpacity
+                  className="w-full py-3 px-4 rounded-xl mb-2 bg-neutral-100 flex-row items-center"
+                  onPress={() => setMoveStack((prev) => prev.slice(0, -1))}
+                >
+                  <Feather name="arrow-left" size={18} color="black" />
+                  <Text className="font-bold text-black ml-2">Back</Text>
+                </TouchableOpacity>
+              ) : null}
+
+              {visibleMoveFolders.map((folder) => (
+                <TouchableOpacity
+                  key={folder.id}
+                  className="w-full py-3 px-4 rounded-xl mb-2 bg-neutral-100 flex-row items-center justify-between"
+                  onPress={() =>
+                    setMoveStack((prev) => [
+                      ...prev,
+                      { id: folder.id, name: folder.name },
+                    ])
+                  }
+                >
+                  <Text className="font-bold text-black" numberOfLines={1}>
+                    {folder.name}
+                  </Text>
+                  <Feather name="chevron-right" size={18} color="black" />
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <View className="flex-row w-full gap-2">
+              <TouchableOpacity
+                className="flex-1 bg-neutral-200 py-4 rounded-xl items-center"
+                onPress={() => {
+                  setMoveModalVisible(false);
+                  setSelectedDocument(null);
+                  setMoveStack([]);
+                }}
+              >
+                <Text className="font-bold text-black">Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-1 bg-black py-4 rounded-xl items-center"
+                onPress={handleMoveDocument}
+                disabled={movingDocument || !moveTargetFolderId}
+              >
+                {movingDocument ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text className="font-bold text-white">Move Here</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={scanModalVisible} transparent animationType="fade">
+        <View className="flex-1 justify-center items-center bg-black/60">
+          <View className="bg-white p-6 rounded-[32px] w-[85%] items-center shadow-2xl">
+            <Feather
+              name="file-text"
+              size={40}
+              color="#4F46E5"
+              className="mb-4"
+            />
+            <Text className="text-xl font-black text-black mb-2 text-center">
+              Save Scanned Document
+            </Text>
+            <Text className="text-neutral-500 text-center mb-6">
+              Enter a name for your PDF document.
+            </Text>
+            <TextInput
+              className="w-full bg-neutral-100 rounded-2xl p-4 text-left text-lg font-bold mb-6"
+              value={scannedFileName}
+              onChangeText={setScannedFileName}
+              placeholder="e.g. Scan"
+            />
+            <View className="flex-row w-full gap-2">
+              <TouchableOpacity
+                className="flex-1 bg-neutral-200 py-4 rounded-xl items-center"
+                onPress={() => {
+                  setScanModalVisible(false);
+                  setScannedImageUri(null);
+                  setScannedFileName("");
+                }}
+              >
+                <Text className="font-bold text-black">Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-1 bg-[#4F46E5] py-4 rounded-xl items-center"
+                onPress={handleSaveScannedDoc}
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text className="font-bold text-white">Save PDF</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={noteModalVisible} transparent animationType="slide">
+        <View className="flex-1 justify-end bg-black/40">
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            keyboardVerticalOffset={24}
+            className="w-full"
+          >
+            <View className="bg-white pt-6 px-6 pb-10 rounded-t-[32px] h-[80%]">
+              <View className="flex-row justify-between items-center mb-6">
+                <Text className="text-2xl font-black text-black">
+                  Secure Note
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setNoteModalVisible(false);
+                  }}
+                >
+                  <Feather name="x" size={24} color="black" />
+                </TouchableOpacity>
+              </View>
+
+              <TextInput
+                className="text-xl font-bold bg-neutral-100 p-4 rounded-xl mb-4"
+                placeholderTextColor="gray"
+                placeholder="Note Title"
+                value={noteTitle}
+                onChangeText={setNoteTitle}
+              />
+
+              <TextInput
+                className="flex-1 text-black bg-neutral-100 p-4 rounded-xl mb-6 text-lg"
+                placeholderTextColor="gray"
+                placeholder="Write your notes here..."
+                multiline
+                returnKeyType="done"
+                blurOnSubmit
+                onSubmitEditing={Keyboard.dismiss}
+                textAlignVertical="top"
+                value={noteContent}
+                onChangeText={setNoteContent}
+              />
+
+              <View className="flex-row gap-2">
+                <TouchableOpacity
+                  className="flex-1 bg-neutral-200 py-4 rounded-full items-center"
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setNoteModalVisible(false);
+                  }}
+                >
+                  <Text className="text-black font-bold text-lg">Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  className="flex-1 bg-black py-4 rounded-full items-center"
+                  onPress={handleCreateNote}
+                >
+                  <Text className="text-white font-bold text-lg">Save Note</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </SafeAreaView>
