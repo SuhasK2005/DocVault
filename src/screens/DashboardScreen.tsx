@@ -754,7 +754,11 @@ export default function DashboardScreen() {
             recentFolders.map((folder) => (
               <TouchableOpacity
                 key={folder.id}
-                onPress={() => navigation.navigate("AllDocuments")}
+                onPress={() =>
+                  navigation.navigate("AllDocuments", {
+                    openFolderId: folder.id,
+                  })
+                }
                 className="flex-row items-center p-4 bg-white rounded-[24px] mb-3 shadow-sm border border-neutral-100"
               >
                 <View className="w-14 h-14 rounded-2xl items-center justify-center mr-4 bg-[#18181B]">
@@ -768,7 +772,7 @@ export default function DashboardScreen() {
                     {folder.name}
                   </Text>
                   <Text className="text-neutral-500 font-bold text-xs">
-                    Open in File Hub
+                    Open folder
                   </Text>
                 </View>
                 <View className="w-10 h-10 items-center justify-center bg-neutral-50 rounded-full">

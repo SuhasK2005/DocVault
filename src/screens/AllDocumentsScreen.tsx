@@ -81,6 +81,7 @@ export default function AllDocumentsScreen() {
   const [selectedDocument, setSelectedDocument] = useState<DocumentNode | null>(
     null,
   );
+  const [openingDocument, setOpeningDocument] = useState(false);
   const [deletingDocument, setDeletingDocument] = useState(false);
 
   const [documentRenameVisible, setDocumentRenameVisible] = useState(false);
@@ -585,6 +586,24 @@ export default function AllDocumentsScreen() {
     setMoveModalVisible(true);
   };
 
+  const openDocumentViewer = () => {
+    if (!selectedDocument?.storage_path || openingDocument) {
+      return;
+    }
+
+    setOpeningDocument(true);
+    setDocumentActionVisible(false);
+
+    navigation.navigate("DocumentViewer", {
+      id: selectedDocument.id,
+      name: selectedDocument.name,
+      storagePath: selectedDocument.storage_path,
+      mimeType: selectedDocument.mime_type,
+    });
+
+    setTimeout(() => setOpeningDocument(false), 350);
+  };
+
   const handleMoveDocument = async () => {
     if (!selectedDocument?.id) return;
     if (!moveTargetFolderId) {
@@ -1082,11 +1101,12 @@ export default function AllDocumentsScreen() {
 
             <TouchableOpacity
               className="bg-neutral-100 py-4 rounded-xl items-center mb-3"
-              onPress={() =>
-                Alert.alert("Coming Soon", "View option will be enabled later.")
-              }
+              onPress={openDocumentViewer}
+              disabled={openingDocument || !selectedDocument?.storage_path}
             >
-              <Text className="font-bold text-black">View</Text>
+              <Text className="font-bold text-black">
+                {openingDocument ? "Opening..." : "View"}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity

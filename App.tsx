@@ -10,6 +10,7 @@ import LoginScreen from "./src/screens/LoginScreen";
 import UnlockScreen from "./src/screens/UnlockScreen";
 import DashboardScreen from "./src/screens/DashboardScreen";
 import AllDocumentsScreen from "./src/screens/AllDocumentsScreen";
+import DocumentViewerScreen from "./src/screens/DocumentViewerScreen";
 
 import * as Linking from "expo-linking";
 
@@ -31,6 +32,7 @@ const linking = {
       Unlock: "unlock",
       Dashboard: "dashboard",
       AllDocuments: "documents",
+      DocumentViewer: "viewer",
     },
   },
 };
@@ -113,6 +115,10 @@ export default function App() {
           <>
             <Stack.Screen name="Dashboard" component={DashboardScreen} />
             <Stack.Screen name="AllDocuments" component={AllDocumentsScreen} />
+            <Stack.Screen
+              name="DocumentViewer"
+              component={DocumentViewerScreen}
+            />
           </>
         )}
       </Stack.Navigator>
