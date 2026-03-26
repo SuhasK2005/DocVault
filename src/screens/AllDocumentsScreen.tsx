@@ -1,4 +1,10 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -15,7 +21,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Feather } from "@expo/vector-icons";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+} from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
@@ -41,9 +51,25 @@ type DocumentNode = {
   color: string;
 };
 
+const withTimeout = async <T,>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string,
+) => {
+  return Promise.race<T>([
+    promise,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => reject(new Error(message)), timeoutMs);
+    }),
+  ]);
+};
+
 export default function AllDocumentsScreen() {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const user = useAuthStore((state) => state.user);
+  const lastOpenedFolderFromRouteRef = useRef<string | null>(null);
+  const [routeFolderHydrated, setRouteFolderHydrated] = useState(false);
 
   const [documents, setDocuments] = useState<DocumentNode[]>([]);
   const [folders, setFolders] = useState<FolderNode[]>([]);
@@ -236,12 +262,73 @@ export default function AllDocumentsScreen() {
     }
   };
 
+  useEffect(() => {
+    const requestedFolderId = route.params?.openFolderId as string | undefined;
+    if (requestedFolderId) {
+      setRouteFolderHydrated(false);
+      return;
+    }
+
+    setRouteFolderHydrated(true);
+  }, [route.params?.openFolderId]);
+
   useFocusEffect(
     useCallback(() => {
       fetchFolders();
+
+      if (!routeFolderHydrated) {
+        return;
+      }
+
       fetchAllDocuments();
-    }, [user?.id, currentFolderId]),
+    }, [user?.id, currentFolderId, routeFolderHydrated]),
   );
+
+  useEffect(() => {
+    const requestedFolderId = route.params?.openFolderId as string | undefined;
+    if (!requestedFolderId || routeFolderHydrated) {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      setRouteFolderHydrated(true);
+    }, 3000);
+
+    return () => clearTimeout(timeoutId);
+  }, [route.params?.openFolderId, routeFolderHydrated]);
+
+  useEffect(() => {
+    const requestedFolderId = route.params?.openFolderId as string | undefined;
+    if (!requestedFolderId || !allFolders.length) {
+      return;
+    }
+
+    if (lastOpenedFolderFromRouteRef.current === requestedFolderId) {
+      return;
+    }
+
+    const folderById = new Map(allFolders.map((folder) => [folder.id, folder]));
+    const path: Array<{ id: string; name: string }> = [];
+    const visited = new Set<string>();
+
+    let cursor = folderById.get(requestedFolderId);
+    while (cursor && !visited.has(cursor.id)) {
+      visited.add(cursor.id);
+      path.push({ id: cursor.id, name: cursor.name });
+      cursor = cursor.parent_id ? folderById.get(cursor.parent_id) : undefined;
+    }
+
+    if (!path.length) {
+      setRouteFolderHydrated(true);
+      return;
+    }
+
+    path.reverse();
+    setFolderStack(path);
+    lastOpenedFolderFromRouteRef.current = requestedFolderId;
+    navigation.setParams({ openFolderId: undefined });
+    setRouteFolderHydrated(true);
+  }, [allFolders, navigation, route.params?.openFolderId]);
 
   const filteredFoldersForView = useMemo(() => {
     const q = folderSearch.trim().toLowerCase();
@@ -685,18 +772,57 @@ export default function AllDocumentsScreen() {
       return;
     }
 
+    const updatedName = folderRenameValue.trim();
+    if (updatedName === selectedFolderForRename.name) {
+      setFolderRenameVisible(false);
+      setSelectedFolderForRename(null);
+      setFolderRenameValue("");
+      return;
+    }
+
     try {
       setRenamingFolder(true);
-      const { error } = await supabase
-        .from("folders")
-        .update({ name: folderRenameValue.trim() })
-        .eq("id", selectedFolderForRename.id)
-        .eq("user_id", user?.id);
+      const { data, error } = await withTimeout(
+        supabase
+          .from("folders")
+          .update({ name: updatedName })
+          .eq("id", selectedFolderForRename.id)
+          .select("id")
+          .maybeSingle(),
+        10000,
+        "Rename is taking too long. Please check your connection and try again.",
+      );
 
       if (error) throw error;
+      if (!data?.id) {
+        throw new Error("Folder rename failed. Please try again.");
+      }
+
+      setFolders((prev) =>
+        prev.map((folder) =>
+          folder.id === selectedFolderForRename.id
+            ? { ...folder, name: updatedName }
+            : folder,
+        ),
+      );
+      setAllFolders((prev) =>
+        prev.map((folder) =>
+          folder.id === selectedFolderForRename.id
+            ? { ...folder, name: updatedName }
+            : folder,
+        ),
+      );
+      setFolderStack((prev) =>
+        prev.map((entry) =>
+          entry.id === selectedFolderForRename.id
+            ? { ...entry, name: updatedName }
+            : entry,
+        ),
+      );
 
       setFolderRenameVisible(false);
       setSelectedFolderForRename(null);
+      setFolderRenameValue("");
       fetchFolders();
       Alert.alert("Renamed", "Folder renamed successfully.");
     } catch (err: any) {

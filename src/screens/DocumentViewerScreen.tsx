@@ -15,7 +15,7 @@ import { Feather } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
-import * as WebBrowser from "expo-web-browser";
+import { WebView } from "react-native-webview";
 import { supabase } from "../services/supabase";
 
 let PdfComponent: any = null;
@@ -193,18 +193,6 @@ export default function DocumentViewerScreen() {
     await Sharing.shareAsync(localUri);
   };
 
-  const openPdfInBrowser = async () => {
-    try {
-      const url =
-        remotePdfUrl || (await getSignedDocumentUrl(params.storagePath, 90));
-      await WebBrowser.openBrowserAsync(url);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Could not open PDF in browser.";
-      Alert.alert("Error", message);
-    }
-  };
-
   const handleEditText = () => {
     if (kind !== "text") return;
     setIsEditingText(true);
@@ -300,18 +288,25 @@ export default function DocumentViewerScreen() {
           );
         }
 
+        const gviewUrl = `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(
+          remotePdfUrl,
+        )}`;
+
         return (
-          <View className="flex-1 bg-neutral-950 rounded-2xl overflow-hidden items-center justify-center px-8">
-            <Text className="text-neutral-200 text-center mb-4">
-              PDF inline preview needs additional native modules. Open it in the
-              browser.
-            </Text>
-            <TouchableOpacity
-              className="bg-white py-3 px-6 rounded-xl"
-              onPress={openPdfInBrowser}
-            >
-              <Text className="text-black font-bold">Open PDF</Text>
-            </TouchableOpacity>
+          <View className="flex-1 bg-neutral-950 rounded-2xl overflow-hidden">
+            <WebView
+              source={{ uri: gviewUrl }}
+              originWhitelist={["*"]}
+              startInLoadingState
+              renderLoading={() => (
+                <View className="flex-1 items-center justify-center bg-neutral-950">
+                  <ActivityIndicator size="large" color="#ffffff" />
+                  <Text className="text-neutral-400 mt-3 font-semibold">
+                    Loading PDF...
+                  </Text>
+                </View>
+              )}
+            />
           </View>
         );
       }

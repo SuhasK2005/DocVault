@@ -94,6 +94,16 @@ export default function DashboardScreen() {
     );
   }, [folders, currentPickerFolderId]);
 
+  const foldersWithChildren = useMemo(() => {
+    const parentSet = new Set<string>();
+    folders.forEach((folder) => {
+      if (folder.parent_id) {
+        parentSet.add(folder.parent_id);
+      }
+    });
+    return parentSet;
+  }, [folders]);
+
   const recentFolders = useMemo(() => folders.slice(0, 4), [folders]);
 
   const fetchDocumentsCount = async () => {
@@ -562,54 +572,13 @@ export default function DashboardScreen() {
     }
   };
 
-  const runPendingAction = async () => {
-    if (
-      launchingAction ||
-      actionLockRef.current ||
-      documentPickerBusy ||
-      mediaPickerBusy
-    ) {
+  const handlePickerFolderTap = (folder: FolderNode) => {
+    if (foldersWithChildren.has(folder.id)) {
+      setPickerStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
       return;
     }
 
-    if (!pendingAction) {
-      setFolderPickerVisible(false);
-      return;
-    }
-
-    if (!currentPickerFolderId) {
-      Alert.alert("Folder Required", "Open a folder and select that location.");
-      return;
-    }
-
-    actionLockRef.current = true;
-    const actionToRun = pendingAction;
-    const folderId = currentPickerFolderId;
-    setActiveDestinationFolderId(folderId);
-    setLaunchingAction(true);
-    setPendingAction(null);
-    setFolderPickerVisible(false);
-
-    try {
-      await new Promise<void>((resolve) => {
-        InteractionManager.runAfterInteractions(() => resolve());
-      });
-      await new Promise((resolve) => setTimeout(resolve, 350));
-      setLaunchingAction(false);
-
-      if (actionToRun === "uploadFiles") {
-        await handleUploadFromFiles(folderId);
-      } else if (actionToRun === "uploadGallery") {
-        await handleUploadFromGallery(folderId);
-      } else if (actionToRun === "scan") {
-        await handleScanDocument();
-      } else if (actionToRun === "note") {
-        setNoteModalVisible(true);
-      }
-    } finally {
-      actionLockRef.current = false;
-      setLaunchingAction(false);
-    }
+    executeActionForFolder(folder.id);
   };
 
   return (
@@ -827,30 +796,21 @@ export default function DashboardScreen() {
               ) : null}
 
               {visiblePickerFolders.map((folder) => (
-                <View
+                <TouchableOpacity
                   key={folder.id}
                   className="w-full py-3 px-4 rounded-xl mb-2 bg-neutral-100 flex-row items-center justify-between"
+                  onPress={() => handlePickerFolderTap(folder)}
                 >
-                  <TouchableOpacity
-                    className="flex-1"
-                    onPress={() => executeActionForFolder(folder.id)}
+                  <Text
+                    className="font-bold text-black flex-1"
+                    numberOfLines={1}
                   >
-                    <Text className="font-bold text-black" numberOfLines={1}>
-                      {folder.name}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    className="pl-3"
-                    onPress={() =>
-                      setPickerStack((prev) => [
-                        ...prev,
-                        { id: folder.id, name: folder.name },
-                      ])
-                    }
-                  >
+                    {folder.name}
+                  </Text>
+                  {foldersWithChildren.has(folder.id) ? (
                     <Feather name="chevron-right" size={18} color="black" />
-                  </TouchableOpacity>
-                </View>
+                  ) : null}
+                </TouchableOpacity>
               ))}
             </ScrollView>
 
@@ -868,39 +828,15 @@ export default function DashboardScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 className="flex-1 bg-black py-4 rounded-xl items-center"
-                onPress={runPendingAction}
-                disabled={
-                  uploading ||
-                  launchingAction ||
-                  documentPickerBusy ||
-                  mediaPickerBusy
-                }
+                onPress={() => {
+                  setCreateParentId(currentPickerFolderId);
+                  setFolderPickerVisible(false);
+                  setFolderCreateVisible(true);
+                }}
               >
-                {uploading ||
-                launchingAction ||
-                documentPickerBusy ||
-                mediaPickerBusy ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <Text className="font-bold text-white">
-                    Select & Continue
-                  </Text>
-                )}
+                <Text className="font-bold text-white">Create Folder</Text>
               </TouchableOpacity>
             </View>
-
-            <TouchableOpacity
-              className="mt-4"
-              onPress={() => {
-                setCreateParentId(currentPickerFolderId);
-                setFolderPickerVisible(false);
-                setFolderCreateVisible(true);
-              }}
-            >
-              <Text className="text-black font-bold">
-                Create New Folder Here
-              </Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
