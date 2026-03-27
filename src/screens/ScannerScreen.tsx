@@ -17,10 +17,19 @@ import { supabase } from "../services/supabase";
 import { useAuthStore } from "../stores/useAuthStore";
 import CameraScreen from "../features/scanner/CameraScreen";
 import CropScreen from "../features/scanner/CropScreen";
-import FilterScreen from "../features/scanner/FilterScreen";
 import PreviewScreen from "../features/scanner/PreviewScreen";
 import { createPdfFromPages } from "../features/scanner/pdfUtils";
-import { ScannerFilter, ScannerPage } from "../features/scanner/types";
+import { ScannerPage } from "../features/scanner/types";
+import { BlurView } from "expo-blur";
+
+const THEME = {
+  bg: "#0e0e0e",
+  surface: "#1a1919",
+  surfaceBright: "#2c2c2c",
+  accent: "#ff9157",
+  textMuted: "#adaaaa",
+  borderGlass: "rgba(173, 170, 170, 0.1)",
+};
 
 type FolderNode = {
   id: string;
@@ -28,7 +37,7 @@ type FolderNode = {
   parent_id: string | null;
 };
 
-type ScannerStep = "camera" | "crop" | "filter" | "preview";
+type ScannerStep = "camera" | "crop" | "preview";
 
 export default function ScannerScreen() {
   const navigation = useNavigation<any>();
@@ -38,7 +47,6 @@ export default function ScannerScreen() {
   const [step, setStep] = React.useState<ScannerStep>("camera");
   const [capturedUri, setCapturedUri] = React.useState<string | null>(null);
   const [croppedUri, setCroppedUri] = React.useState<string | null>(null);
-  const [selectedFilter, setSelectedFilter] = React.useState<ScannerFilter>("original");
   const [pages, setPages] = React.useState<ScannerPage[]>([]);
   const [fileName, setFileName] = React.useState("Scan");
   const [uploading, setUploading] = React.useState(false);
@@ -77,22 +85,21 @@ export default function ScannerScreen() {
     return "No folder selected";
   }, [folders, route.params?.folderName, selectedFolderId]);
 
-  const appendPage = React.useCallback(() => {
-    if (!croppedUri) return;
-
-    setPages((prev) => [
-      ...prev,
-      {
-        id: `${Date.now()}-${Math.random()}`,
-        imageUri: croppedUri,
-        filter: selectedFilter,
-      },
-    ]);
-    setCapturedUri(null);
-    setCroppedUri(null);
-    setSelectedFilter("original");
-    setStep("preview");
-  }, [croppedUri, selectedFilter]);
+  const appendPage = React.useCallback(
+    (uri: string) => {
+      setPages((prev) => [
+        ...prev,
+        {
+          id: `${Date.now()}-${Math.random()}`,
+          imageUri: uri,
+        },
+      ]);
+      setCapturedUri(null);
+      setCroppedUri(null);
+      setStep("preview");
+    },
+    []
+  );
 
   const handleSave = async () => {
     if (!user?.id) {
@@ -170,7 +177,6 @@ export default function ScannerScreen() {
             setStep("crop");
           }}
           onCancel={() => navigation.goBack()}
-          pageCount={pages.length}
         />
       );
     }
@@ -181,34 +187,55 @@ export default function ScannerScreen() {
           imageUri={capturedUri}
           onBack={() => setStep("camera")}
           onCropped={(uri) => {
-            setCroppedUri(uri);
-            setStep("filter");
+            appendPage(uri);
           }}
         />
       );
     }
 
-    if (step === "filter" && croppedUri) {
-      return (
-        <FilterScreen
-          imageUri={croppedUri}
-          selected={selectedFilter}
-          onSelect={setSelectedFilter}
-          onBack={() => setStep("crop")}
-          onNext={appendPage}
-        />
-      );
-    }
+
 
     return (
-      <SafeAreaView className="flex-1 bg-[#F4F4F5]">
-        <View className="px-5 pt-2 pb-1 flex-row items-center justify-between">
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text className="font-bold text-black">Close</Text>
+      <SafeAreaView style={{ flex: 1, backgroundColor: THEME.bg }}>
+        <BlurView
+          tint="dark"
+          intensity={80}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            paddingHorizontal: 24,
+            paddingTop: 56,
+            paddingBottom: 24,
+          }}
+        >
+          <TouchableOpacity
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 14,
+              backgroundColor: THEME.surfaceBright,
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: 1,
+              borderColor: THEME.borderGlass,
+            }}
+            onPress={() => navigation.goBack()}
+          >
+            <Feather name="x" size={20} color="white" />
           </TouchableOpacity>
-          <Text className="font-bold text-black">Scanner</Text>
-          <View style={{ width: 40 }} />
-        </View>
+
+          <View style={{ alignItems: "center" }}>
+            <Text style={{ color: "white", fontSize: 18, fontFamily: "SpaceGrotesk_Bold" }}>
+              Scanner
+            </Text>
+            <Text style={{ color: THEME.textMuted, fontSize: 10, fontFamily: "SpaceGrotesk_Bold", letterSpacing: 1, textTransform: "uppercase", marginTop: 2 }}>
+              VAULT INTAKE
+            </Text>
+          </View>
+
+          <View style={{ width: 44 }} />
+        </BlurView>
 
         <PreviewScreen
           pages={pages}
@@ -225,19 +252,42 @@ export default function ScannerScreen() {
         />
 
         <Modal visible={folderPickerVisible} transparent animationType="slide">
-          <View className="flex-1 justify-end bg-black/40">
-            <View className="bg-white rounded-t-[28px] pt-5 px-5 pb-8 h-[70%]">
-              <View className="flex-row items-center justify-between mb-4">
-                <Text className="text-2xl font-black text-black">Select Folder</Text>
+          <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.8)" }}>
+            <View
+              style={{
+                backgroundColor: THEME.surface,
+                borderTopLeftRadius: 32,
+                borderTopRightRadius: 32,
+                paddingHorizontal: 24,
+                paddingTop: 24,
+                paddingBottom: 40,
+                height: "80%",
+                borderWidth: 1,
+                borderColor: THEME.borderGlass,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 24,
+                }}
+              >
+                <Text style={{ color: "white", fontSize: 24, fontFamily: "SpaceGrotesk_Bold" }}>
+                  Vault Location
+                </Text>
                 <TouchableOpacity onPress={() => setFolderPickerVisible(false)}>
-                  <Feather name="x" size={22} color="black" />
+                  <Feather name="x" size={24} color={THEME.textMuted} />
                 </TouchableOpacity>
               </View>
 
-              <ScrollView>
+              <ScrollView showsVerticalScrollIndicator={false}>
                 {folders.length === 0 ? (
-                  <View className="py-8 items-center">
-                    <Text className="text-neutral-500 font-bold">No folders found.</Text>
+                  <View style={{ paddingVertical: 32, alignItems: "center" }}>
+                    <Text style={{ color: THEME.textMuted, fontFamily: "Manrope_Bold" }}>
+                      No folders found.
+                    </Text>
                   </View>
                 ) : (
                   folders.map((folder) => {
@@ -245,20 +295,25 @@ export default function ScannerScreen() {
                     return (
                       <TouchableOpacity
                         key={folder.id}
-                        className={`p-4 rounded-xl border mb-3 ${
-                          selected
-                            ? "bg-black border-black"
-                            : "bg-neutral-50 border-neutral-200"
-                        }`}
+                        style={{
+                          padding: 16,
+                          borderRadius: 20,
+                          backgroundColor: selected ? THEME.surfaceBright : "transparent",
+                          borderWidth: 1,
+                          borderColor: selected ? THEME.accent : THEME.borderGlass,
+                          marginBottom: 12,
+                        }}
                         onPress={() => {
                           setSelectedFolderId(folder.id);
                           setFolderPickerVisible(false);
                         }}
                       >
                         <Text
-                          className={`font-bold ${
-                            selected ? "text-white" : "text-black"
-                          }`}
+                          style={{
+                            color: selected ? "white" : THEME.textMuted,
+                            fontFamily: "Manrope_Bold",
+                            fontSize: 16,
+                          }}
                         >
                           {folder.name}
                         </Text>
@@ -276,8 +331,11 @@ export default function ScannerScreen() {
 
   if (uploading && step !== "preview") {
     return (
-      <View className="flex-1 items-center justify-center bg-black">
-        <ActivityIndicator color="white" />
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: THEME.bg }}>
+        <ActivityIndicator color={THEME.accent} />
+        <Text style={{ color: THEME.textMuted, fontFamily: "SpaceGrotesk_Bold", marginTop: 16 }}>
+          PREPARING VAULT...
+        </Text>
       </View>
     );
   }

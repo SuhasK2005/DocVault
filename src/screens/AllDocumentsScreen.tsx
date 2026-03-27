@@ -86,9 +86,11 @@ export default function AllDocumentsScreen() {
   const [noteTitle, setNoteTitle] = useState("");
   const [noteContent, setNoteContent] = useState("");
 
+  const [sortOrder, setSortOrder] = useState<"date_desc" | "date_asc" | "name_asc">("date_desc");
+
   const [documentActionVisible, setDocumentActionVisible] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<DocumentNode | null>(
-    null,
+    null
   );
   const [openingDocument, setOpeningDocument] = useState(false);
   const [deletingDocument, setDeletingDocument] = useState(false);
@@ -105,7 +107,7 @@ export default function AllDocumentsScreen() {
 
   const currentFolderId = useMemo(
     () => (folderStack.length ? folderStack[folderStack.length - 1].id : null),
-    [folderStack],
+    [folderStack]
   );
 
   const currentFolderName = useMemo(
@@ -113,26 +115,26 @@ export default function AllDocumentsScreen() {
       folderStack.length
         ? folderStack[folderStack.length - 1].name
         : "File Hub",
-    [folderStack],
+    [folderStack]
   );
 
   const moveTargetFolderId = useMemo(
     () => (moveStack.length ? moveStack[moveStack.length - 1].id : null),
-    [moveStack],
+    [moveStack]
   );
 
   const moveTargetFolderName = useMemo(
     () =>
       moveStack.length ? moveStack[moveStack.length - 1].name : "File Hub",
-    [moveStack],
+    [moveStack]
   );
 
   const visibleMoveFolders = useMemo(
     () =>
       allFolders.filter(
-        (folder) => (folder.parent_id || null) === moveTargetFolderId,
+        (folder) => (folder.parent_id || null) === moveTargetFolderId
       ),
-    [allFolders, moveTargetFolderId],
+    [allFolders, moveTargetFolderId]
   );
 
   const formatBytes = (bytes: number | null) => {
@@ -228,7 +230,7 @@ export default function AllDocumentsScreen() {
         })) as FolderNode[];
 
         setFolders(
-          normalized.filter((folder) => (currentFolderId ? false : true)),
+          normalized.filter((folder) => (currentFolderId ? false : true))
         );
         setAllFolders(normalized);
         return;
@@ -238,7 +240,7 @@ export default function AllDocumentsScreen() {
       const list = (data || []) as FolderNode[];
       setAllFolders(list);
       setFolders(
-        list.filter((folder) => (folder.parent_id || null) === currentFolderId),
+        list.filter((folder) => (folder.parent_id || null) === currentFolderId)
       );
     } catch (err: any) {
       Alert.alert("Error", err?.message || "Could not load folders");
@@ -264,7 +266,7 @@ export default function AllDocumentsScreen() {
       }
 
       fetchAllDocuments();
-    }, [user?.id, currentFolderId, routeFolderHydrated]),
+    }, [user?.id, currentFolderId, routeFolderHydrated])
   );
 
   useEffect(() => {
@@ -314,10 +316,21 @@ export default function AllDocumentsScreen() {
   }, [allFolders, navigation, route.params?.openFolderId]);
 
   const filteredFoldersForView = useMemo(() => {
+    let list = [...folders];
+    
+    // Sorting logic
+    if (sortOrder === "date_desc") {
+      list.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+    } else if (sortOrder === "date_asc") {
+      list.sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
+    } else if (sortOrder === "name_asc") {
+      list.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
     const q = folderSearch.trim().toLowerCase();
-    if (!q) return folders;
-    return folders.filter((folder) => folder.name.toLowerCase().includes(q));
-  }, [folderSearch, folders]);
+    if (!q) return list;
+    return list.filter((folder) => folder.name.toLowerCase().includes(q));
+  }, [folderSearch, folders, sortOrder]);
 
   const manageFoldersList = useMemo(() => {
     const q = manageSearch.trim().toLowerCase();
@@ -334,7 +347,7 @@ export default function AllDocumentsScreen() {
     if (!currentFolderId) {
       Alert.alert(
         "Folder Required",
-        "Open a folder and upload inside that folder.",
+        "Open a folder and upload inside that folder."
       );
       return;
     }
@@ -430,9 +443,11 @@ export default function AllDocumentsScreen() {
   };
 
   const handleUploadPress = () => {
-    Alert.alert("Upload Document", "Choose source", [
-      { text: "Choose from Files", onPress: handleUploadFromFiles },
-      { text: "Choose from Gallery", onPress: handleUploadFromGallery },
+    Alert.alert("Add to Vault", "Choose an action", [
+      { text: "Upload File", onPress: handleUploadFromFiles },
+      { text: "Upload from Gallery", onPress: handleUploadFromGallery },
+      { text: "Scan Document", onPress: handleScanDocument },
+      { text: "Create Note", onPress: () => setNoteModalVisible(true) },
       { text: "Cancel", style: "cancel" },
     ]);
   };
@@ -441,7 +456,7 @@ export default function AllDocumentsScreen() {
     if (!currentFolderId) {
       Alert.alert(
         "Folder Required",
-        "Open a folder and scan inside that folder.",
+        "Open a folder and scan inside that folder."
       );
       return;
     }
@@ -460,7 +475,7 @@ export default function AllDocumentsScreen() {
     if (!currentFolderId) {
       Alert.alert(
         "Folder Required",
-        "Open a folder and save notes inside that folder.",
+        "Open a folder and save notes inside that folder."
       );
       return;
     }
@@ -641,7 +656,7 @@ export default function AllDocumentsScreen() {
     if (!supportsNestedFolders && currentFolderId) {
       Alert.alert(
         "Schema Update Needed",
-        "Nested folders need folders.parent_id in your database. Run migration 03_nested_folders.sql and try again.",
+        "Nested folders need folders.parent_id in your database. Run migration 03_nested_folders.sql and try again."
       );
       return;
     }
@@ -730,18 +745,18 @@ export default function AllDocumentsScreen() {
 
       setFolders((prev) =>
         prev.map((folder) =>
-          folder.id === folderId ? { ...folder, name: updatedName } : folder,
-        ),
+          folder.id === folderId ? { ...folder, name: updatedName } : folder
+        )
       );
       setAllFolders((prev) =>
         prev.map((folder) =>
-          folder.id === folderId ? { ...folder, name: updatedName } : folder,
-        ),
+          folder.id === folderId ? { ...folder, name: updatedName } : folder
+        )
       );
       setFolderStack((prev) =>
         prev.map((entry) =>
-          entry.id === folderId ? { ...entry, name: updatedName } : entry,
-        ),
+          entry.id === folderId ? { ...entry, name: updatedName } : entry
+        )
       );
 
       setFolderRenameVisible(false);
@@ -784,132 +799,363 @@ export default function AllDocumentsScreen() {
             }
           },
         },
-      ],
+      ]
+    );
+  };
+  const handleFolderLongPress = (folder: FolderNode) => {
+    Alert.alert(
+      folder.name,
+      "Choose an action",
+      [
+        { text: "Rename", onPress: () => openFolderRename(folder) },
+        { text: "Delete", style: "destructive", onPress: () => handleDeleteFolder(folder) },
+        { text: "Cancel", style: "cancel" }
+      ]
     );
   };
 
-  return (
-    <SafeAreaView className="flex-1 bg-[#F4F4F5]">
-      <StatusBar style="dark" />
+  const handleSortPress = () => {
+    Alert.alert(
+      "Sort Folders",
+      "Choose sorting order",
+      [
+        { text: "Date (Newest)", onPress: () => setSortOrder("date_desc") },
+        { text: "Date (Oldest)", onPress: () => setSortOrder("date_asc") },
+        { text: "Name (A-Z)", onPress: () => setSortOrder("name_asc") },
+        { text: "Cancel", style: "cancel" }
+      ]
+    );
+  };
 
-      <View className="flex-row items-center justify-between px-6 pt-4 pb-3">
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          className="w-11 h-11 bg-white rounded-full items-center justify-center border border-neutral-200"
-        >
-          <Feather name="arrow-left" size={20} color="black" />
-        </TouchableOpacity>
-        <Text className="text-2xl font-black text-black" numberOfLines={1}>
-          {currentFolderName}
-        </Text>
-        {currentFolderId ? (
-          <TouchableOpacity
-            onPress={() => setFolderModalVisible(true)}
-            className="w-11 h-11 bg-white rounded-full items-center justify-center border border-neutral-200"
+  const THEME = {
+    bg: "#0e0e0e",
+    surface: "#1a1919",
+    surfaceBright: "#2c2c2c",
+    accent: "#ff9157",
+    textMuted: "#adaaaa",
+    borderGlass: "rgba(173, 170, 170, 0.1)",
+  };
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: THEME.bg }}>
+      <StatusBar style="light" />
+
+      {/* Top Header */}
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          paddingHorizontal: 24,
+          paddingTop: 16,
+          paddingBottom: 16,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Feather name="shield" size={20} color={THEME.accent} />
+          <Text
+            style={{
+              color: THEME.accent,
+              fontSize: 18,
+              fontFamily: "SpaceGrotesk_Bold",
+              marginLeft: 8,
+            }}
           >
-            <Feather name="folder-plus" size={18} color="black" />
-          </TouchableOpacity>
-        ) : (
-          <View className="w-11 h-11" />
-        )}
+            Kinetic Vault
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            backgroundColor: THEME.surfaceBright,
+            alignItems: "center",
+            justifyContent: "center",
+            overflow: "hidden",
+          }}
+        >
+          <Feather name="user" size={18} color="white" />
+        </TouchableOpacity>
       </View>
 
-      {currentFolderId ? (
-        <View className="px-6 pb-2">
-          <View className="bg-white rounded-full p-2 flex-row justify-between items-center shadow-lg shadow-neutral-200/50 border border-neutral-100">
-            <TouchableOpacity
-              className="flex-1 py-4 items-center rounded-full bg-neutral-100/50 flex-row justify-center mx-1"
-              onPress={handleUploadPress}
-              disabled={uploading}
-            >
-              {uploading ? (
-                <ActivityIndicator color="black" size="small" />
-              ) : (
-                <Feather name="upload" size={18} color="black" />
-              )}
-              <Text className="font-bold text-black ml-2">Upload</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="w-14 h-14 bg-black rounded-full items-center justify-center mx-1"
-              onPress={handleScanDocument}
-            >
-              <Feather name="camera" size={24} color="white" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="flex-1 py-4 items-center rounded-full bg-neutral-100/50 flex-row justify-center mx-1"
-              onPress={() => setNoteModalVisible(true)}
-            >
-              <Feather name="edit-2" size={18} color="black" />
-              <Text className="font-bold text-black ml-2">Note</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      ) : null}
+      {/* Main Title Area */}
+      <View style={{ paddingHorizontal: 24, marginTop: 12 }}>
+        <Text
+          style={{
+            color: THEME.textMuted,
+            fontSize: 11,
+            fontFamily: "SpaceGrotesk_Bold",
+            letterSpacing: 1.5,
+            textTransform: "uppercase",
+            marginBottom: 6,
+          }}
+        >
+          CENTRAL DIRECTORY
+        </Text>
+        <Text
+          style={{
+            color: "white",
+            fontSize: 32,
+            fontFamily: "SpaceGrotesk_Bold",
+          }}
+        >
+          {currentFolderId ? currentFolderName : "DocVault"}
+        </Text>
+      </View>
 
-      {currentFolderId === null ? (
-        <View className="px-6 pb-2">
-          <View className="bg-white rounded-[24px] p-4 border border-neutral-100">
-            <TextInput
-              className="bg-neutral-100 rounded-xl px-4 py-3 font-bold text-black"
-              placeholder="Search folders"
-              placeholderTextColor="#737373"
-              value={folderSearch}
-              onChangeText={setFolderSearch}
-            />
-            <View className="flex-row gap-2 mt-3">
-              <TouchableOpacity
-                className="flex-1 bg-black py-3 rounded-xl items-center"
-                onPress={() => setFolderModalVisible(true)}
-              >
-                <Text className="text-white font-bold">Create Folder</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="flex-1 bg-neutral-200 py-3 rounded-xl items-center"
-                onPress={() => setManageFoldersVisible(true)}
-              >
-                <Text className="text-black font-bold">Manage Folders</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      ) : null}
+      {/* Action Row */}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          paddingHorizontal: 24,
+          marginTop: 24,
+        }}
+      >
+        <TouchableOpacity
+          style={{
+            width: 52,
+            height: 52,
+            backgroundColor: THEME.surface,
+            borderRadius: 16,
+            alignItems: "center",
+            justifyContent: "center",
+            marginRight: 12,
+            borderWidth: 1,
+            borderColor: THEME.borderGlass,
+          }}
+        >
+          <Feather name="grid" size={20} color="white" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={{
+            width: 52,
+            height: 52,
+            backgroundColor: THEME.surface,
+            borderRadius: 16,
+            alignItems: "center",
+            justifyContent: "center",
+            marginRight: 24,
+            borderWidth: 1,
+            borderColor: THEME.borderGlass,
+          }}
+        >
+          <Feather name="list" size={20} color={THEME.textMuted} />
+        </TouchableOpacity>
 
+        {/* Vertical Separator */}
+        <View
+          style={{
+            width: 1,
+            height: 32,
+            backgroundColor: THEME.surfaceBright,
+            marginHorizontal: 16,
+          }}
+        />
+
+        <TouchableOpacity
+          onPress={() => setFolderModalVisible(true)}
+          style={{
+            width: 52,
+            height: 52,
+            backgroundColor: THEME.surface,
+            borderRadius: 16,
+            alignItems: "center",
+            justifyContent: "center",
+            marginRight: 16,
+            borderWidth: 1,
+            borderColor: THEME.borderGlass,
+          }}
+        >
+          <Feather name="folder-plus" size={20} color="white" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={handleUploadPress}
+          disabled={uploading}
+          style={{
+            flex: 1,
+            flexDirection: "row",
+            alignItems: "center",
+            backgroundColor: THEME.accent,
+            paddingHorizontal: 12,
+            height: 52,
+            borderRadius: 16,
+            justifyContent: "center",
+          }}
+        >
+          {uploading ? (
+            <ActivityIndicator color="#3d1a08" size="small" />
+          ) : (
+            <>
+              <Feather name="plus-circle" size={18} color="#3d1a08" />
+              <Text
+                numberOfLines={1}
+                style={{
+                  color: "#3d1a08",
+                  fontFamily: "SpaceGrotesk_Bold",
+                  fontSize: 14,
+                  marginLeft: 6,
+                }}
+              >
+                Upload
+              </Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* Search Bar */}
+      <View style={{ paddingHorizontal: 24, marginTop: 32, marginBottom: 16 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            backgroundColor: THEME.surface,
+            borderRadius: 20,
+            paddingHorizontal: 16,
+            height: 60,
+            borderWidth: 1,
+            borderColor: THEME.borderGlass,
+          }}
+        >
+          <Feather name="search" size={20} color={THEME.textMuted} />
+          <TextInput
+            style={{
+              flex: 1,
+              color: "white",
+              fontFamily: "Manrope_Bold",
+              fontSize: 16,
+              marginLeft: 12,
+            }}
+            placeholder="Search the secure vault..."
+            placeholderTextColor={THEME.textMuted}
+            value={folderSearch}
+            onChangeText={setFolderSearch}
+          />
+          <TouchableOpacity
+            onPress={handleSortPress}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              paddingVertical: 8,
+              paddingLeft: 12,
+            }}
+          >
+            <Feather name="filter" size={14} color={THEME.textMuted} />
+            <Text
+              style={{
+                color: THEME.textMuted,
+                fontFamily: "Manrope_Bold",
+                marginLeft: 6,
+                fontSize: 13,
+              }}
+            >
+              {sortOrder === "date_desc" ? "Newest" : sortOrder === "date_asc" ? "Oldest" : "Name"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Main List */}
       <ScrollView
-        className="flex-1 px-6 pt-2"
+        style={{ flex: 1, paddingHorizontal: 24 }}
         showsVerticalScrollIndicator={false}
       >
         {loading ? (
-          <View className="items-center justify-center py-12">
-            <ActivityIndicator color="black" />
+          <View
+            style={{
+              alignItems: "center",
+              justifyContent: "center",
+              paddingVertical: 40,
+            }}
+          >
+            <ActivityIndicator color={THEME.accent} />
           </View>
         ) : filteredFoldersForView.length === 0 && documents.length === 0 ? (
-          <View className="bg-white rounded-[24px] p-6 border border-neutral-100">
-            <Text className="text-black font-bold text-lg">
-              Nothing here yet
+          <View
+            style={{
+              alignItems: "center",
+              justifyContent: "center",
+              paddingVertical: 40,
+              backgroundColor: THEME.surface,
+              borderRadius: 24,
+              borderWidth: 1,
+              borderColor: THEME.borderGlass,
+            }}
+          >
+            <Feather
+              name="inbox"
+              size={40}
+              color={THEME.textMuted}
+              style={{ marginBottom: 16 }}
+            />
+            <Text style={{ color: "white", fontSize: 18, fontFamily: "SpaceGrotesk_Bold" }}>
+              Vault Empty
             </Text>
-            <Text className="text-neutral-500 mt-1">
-              Create folders, upload documents, or scan directly inside this
-              folder.
+            <Text
+              style={{
+                color: THEME.textMuted,
+                textAlign: "center",
+                marginTop: 8,
+                marginHorizontal: 32,
+              }}
+            >
+              Securely upload documents, create nested folders, or scan your
+              files into the vault.
             </Text>
           </View>
         ) : (
-          <View className="pb-12">
+          <View style={{ paddingBottom: 40 }}>
             {currentFolderId ? (
               <TouchableOpacity
                 onPress={() => setFolderStack((prev) => prev.slice(0, -1))}
-                className="flex-row items-center p-4 bg-white rounded-[24px] mb-3 shadow-sm border border-neutral-100"
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  padding: 16,
+                  backgroundColor: THEME.surface,
+                  borderRadius: 20,
+                  marginBottom: 12,
+                  borderWidth: 1,
+                  borderColor: THEME.borderGlass,
+                }}
               >
-                <View className="w-14 h-14 rounded-2xl items-center justify-center mr-4 bg-neutral-100">
-                  <Feather name="arrow-up-left" size={24} color="black" />
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 14,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: 16,
+                    backgroundColor: THEME.surfaceBright,
+                  }}
+                >
+                  <Feather name="arrow-up-left" size={20} color="white" />
                 </View>
-                <View className="flex-1">
-                  <Text className="text-black font-bold text-lg mb-1">
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: "white",
+                      fontFamily: "SpaceGrotesk_Bold",
+                      fontSize: 16,
+                      marginBottom: 4,
+                    }}
+                  >
                     Back
                   </Text>
-                  <Text className="text-neutral-500 font-bold text-xs">
+                  <Text
+                    style={{
+                      color: THEME.textMuted,
+                      fontFamily: "Manrope_Bold",
+                      fontSize: 12,
+                    }}
+                  >
                     {folderStack.length === 1
-                      ? "Go back to File Hub"
-                      : "Go to parent folder"}
+                      ? "Return to Central Directory"
+                      : "Return to parent folder"}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -923,106 +1169,226 @@ export default function AllDocumentsScreen() {
                     { id: folder.id, name: folder.name },
                   ])
                 }
+                onLongPress={() => handleFolderLongPress(folder)}
                 key={folder.id}
-                className="flex-row items-center p-4 bg-white rounded-[24px] mb-3 shadow-sm border border-neutral-100"
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  padding: 16,
+                  backgroundColor: THEME.surface,
+                  borderRadius: 20,
+                  marginBottom: 12,
+                  borderWidth: 1,
+                  borderColor: THEME.borderGlass,
+                }}
               >
-                <View className="w-14 h-14 rounded-2xl items-center justify-center mr-4 bg-[#18181B]">
-                  <Feather name="folder" size={24} color="white" />
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 14,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: 16,
+                    backgroundColor: THEME.surfaceBright,
+                  }}
+                >
+                  <Feather name="folder" size={20} color="white" />
                 </View>
-                <View className="flex-1">
+                <View style={{ flex: 1 }}>
                   <Text
-                    className="text-black font-bold text-lg mb-1"
+                    style={{
+                      color: "white",
+                      fontFamily: "SpaceGrotesk_Bold",
+                      fontSize: 16,
+                      marginBottom: 4,
+                    }}
                     numberOfLines={1}
                   >
                     {folder.name}
                   </Text>
-                  <Text className="text-neutral-500 font-bold text-xs">
-                    Folder
+                  <Text
+                    style={{
+                      color: THEME.textMuted,
+                      fontFamily: "Manrope_Bold",
+                      fontSize: 12,
+                    }}
+                  >
+                    Secure Folder
                   </Text>
                 </View>
-                <View className="w-10 h-10 items-center justify-center bg-neutral-50 rounded-full">
-                  <Feather name="chevron-right" size={20} color="black" />
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: THEME.surfaceBright,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Feather name="chevron-right" size={16} color="white" />
                 </View>
               </TouchableOpacity>
             ))}
+
+            {documents.length > 0 && (
+              <Text
+                style={{
+                  color: THEME.textMuted,
+                  fontSize: 12,
+                  fontFamily: "SpaceGrotesk_Bold",
+                  marginVertical: 12,
+                  marginLeft: 4,
+                  letterSpacing: 1,
+                }}
+              >
+                FILES
+              </Text>
+            )}
 
             {documents.map((file) => (
               <TouchableOpacity
                 onPress={() => handleDocumentPress(file)}
                 key={file.id}
-                className="flex-row items-center p-4 bg-white rounded-[24px] mb-3 shadow-sm border border-neutral-100"
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  padding: 16,
+                  backgroundColor: THEME.surface,
+                  borderRadius: 20,
+                  marginBottom: 12,
+                  borderWidth: 1,
+                  borderColor: THEME.borderGlass,
+                }}
               >
                 <View
-                  className="w-14 h-14 rounded-2xl items-center justify-center mr-4"
-                  style={{ backgroundColor: file.color + "15" }}
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 14,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: 16,
+                    backgroundColor: "rgba(255,255,255,0.03)",
+                  }}
                 >
                   <Feather
                     name={file.type as any}
-                    size={24}
+                    size={20}
                     color={file.color}
                   />
                 </View>
-                <View className="flex-1">
+                <View style={{ flex: 1 }}>
                   <Text
-                    className="text-black font-bold text-lg mb-1"
+                    style={{
+                      color: "white",
+                      fontFamily: "SpaceGrotesk_Bold",
+                      fontSize: 16,
+                      marginBottom: 4,
+                    }}
                     numberOfLines={1}
                   >
                     {file.name}
                   </Text>
-                  <Text className="text-neutral-500 font-bold text-xs">
+                  <Text
+                    style={{
+                      color: THEME.textMuted,
+                      fontFamily: "Manrope_Bold",
+                      fontSize: 12,
+                    }}
+                  >
                     {file.size}
                   </Text>
                 </View>
-                <View className="w-10 h-10 items-center justify-center bg-neutral-50 rounded-full">
-                  <Feather name="chevron-right" size={20} color="black" />
-                </View>
+                <Feather
+                  name="more-vertical"
+                  size={20}
+                  color={THEME.textMuted}
+                />
               </TouchableOpacity>
             ))}
           </View>
         )}
       </ScrollView>
 
-      <Modal visible={folderModalVisible} transparent animationType="slide">
-        <View className="flex-1 justify-center items-center bg-black/60">
-          <View className="bg-white p-6 rounded-[32px] w-[85%] items-center shadow-2xl">
-            <Feather
-              name="folder-plus"
-              size={40}
-              color="black"
-              className="mb-4"
-            />
-            <Text className="text-xl font-black text-black mb-2 text-center">
-              Create Folder
-            </Text>
-            <Text className="text-neutral-500 text-center mb-4">
-              Parent: {currentFolderName}
-            </Text>
+      {/* --- Modals for Folders actions --- */}
+      <Modal visible={folderModalVisible} transparent animationType="fade">
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "rgba(0,0,0,0.8)",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: THEME.surface,
+              padding: 24,
+              borderRadius: 32,
+              width: "90%",
+              borderWidth: 1,
+              borderColor: THEME.borderGlass,
+            }}
+          >
+            <View style={{ alignItems: "center", marginBottom: 20 }}>
+              <Feather
+                name="folder-plus"
+                size={32}
+                color={THEME.accent}
+                style={{ marginBottom: 12 }}
+              />
+              <Text style={{ color: "white", fontSize: 20, fontFamily: "SpaceGrotesk_Bold" }}>
+                Create Folder
+              </Text>
+              <Text
+                style={{ color: THEME.textMuted, fontSize: 13, marginTop: 4 }}
+              >
+                Parent: {currentFolderName}
+              </Text>
+            </View>
             <TextInput
-              className="w-full bg-neutral-100 rounded-2xl p-4 text-left text-lg font-bold mb-6"
+              style={{
+                backgroundColor: THEME.surfaceBright,
+                color: "white",
+                padding: 16,
+                borderRadius: 16,
+                fontFamily: "Manrope_Bold",
+                fontSize: 16,
+                marginBottom: 20,
+              }}
               value={newFolderName}
               onChangeText={setNewFolderName}
               placeholder="Folder name"
-              placeholderTextColor="#737373"
+              placeholderTextColor={THEME.textMuted}
             />
-            <View className="flex-row w-full gap-2">
+            <View style={{ flexDirection: "row", gap: 12 }}>
               <TouchableOpacity
-                className="flex-1 bg-neutral-200 py-4 rounded-xl items-center"
-                onPress={() => {
-                  setFolderModalVisible(false);
-                  setNewFolderName("");
-                }}
+                style={{ flex: 1, padding: 16, alignItems: "center" }}
+                onPress={() => setFolderModalVisible(false)}
               >
-                <Text className="font-bold text-black">Cancel</Text>
+                <Text style={{ color: THEME.textMuted, fontFamily: "Manrope_Bold" }}>
+                  Cancel
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                className="flex-1 bg-black py-4 rounded-xl items-center"
+                style={{
+                  flex: 1,
+                  backgroundColor: THEME.accent,
+                  padding: 16,
+                  borderRadius: 16,
+                  alignItems: "center",
+                }}
                 onPress={handleCreateFolder}
                 disabled={creatingFolder}
               >
                 {creatingFolder ? (
-                  <ActivityIndicator color="white" />
+                  <ActivityIndicator color="#3d1a08" />
                 ) : (
-                  <Text className="font-bold text-white">Create</Text>
+                  <Text style={{ color: "#3d1a08", fontFamily: "SpaceGrotesk_Bold" }}>
+                    Create
+                  </Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1031,49 +1397,121 @@ export default function AllDocumentsScreen() {
       </Modal>
 
       <Modal visible={manageFoldersVisible} transparent animationType="slide">
-        <View className="flex-1 justify-end bg-black/40">
-          <View className="bg-white pt-6 px-6 pb-8 rounded-t-[32px] h-[78%]">
-            <View className="flex-row items-center justify-between mb-4">
-              <Text className="text-2xl font-black text-black">
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "flex-end",
+            backgroundColor: "rgba(0,0,0,0.8)",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: THEME.surface,
+              paddingTop: 24,
+              paddingHorizontal: 24,
+              paddingBottom: 40,
+              borderTopLeftRadius: 32,
+              borderTopRightRadius: 32,
+              height: "80%",
+              borderWidth: 1,
+              borderColor: THEME.borderGlass,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 20,
+              }}
+            >
+              <Text style={{ color: "white", fontSize: 24, fontFamily: "SpaceGrotesk_Bold" }}>
                 Manage Folders
               </Text>
               <TouchableOpacity onPress={() => setManageFoldersVisible(false)}>
-                <Feather name="x" size={22} color="black" />
+                <Feather name="x" size={24} color={THEME.textMuted} />
               </TouchableOpacity>
             </View>
             <TextInput
-              className="bg-neutral-100 rounded-xl px-4 py-3 font-bold text-black mb-4"
+              style={{
+                backgroundColor: THEME.surfaceBright,
+                color: "white",
+                padding: 16,
+                borderRadius: 16,
+                fontFamily: "Manrope_Bold",
+                fontSize: 16,
+                marginBottom: 16,
+              }}
               placeholder="Search folders"
-              placeholderTextColor="#737373"
+              placeholderTextColor={THEME.textMuted}
               value={manageSearch}
               onChangeText={setManageSearch}
             />
-
-            <ScrollView>
+            <ScrollView showsVerticalScrollIndicator={false}>
               {manageFoldersList.map((folder) => (
                 <View
                   key={folder.id}
-                  className="flex-row items-center p-4 bg-neutral-50 rounded-[18px] mb-3 border border-neutral-200"
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    padding: 16,
+                    backgroundColor: THEME.surfaceBright,
+                    borderRadius: 20,
+                    marginBottom: 12,
+                  }}
                 >
-                  <View className="flex-1">
+                  <View style={{ flex: 1 }}>
                     <Text
-                      className="font-bold text-black text-base"
+                      style={{
+                        color: "white",
+                        fontFamily: "Manrope_Bold",
+                        fontSize: 16,
+                      }}
                       numberOfLines={1}
                     >
                       {folder.name}
                     </Text>
                   </View>
                   <TouchableOpacity
-                    className="px-3 py-2 rounded-lg bg-white border border-neutral-200 mr-2"
+                    style={{
+                      paddingHorizontal: 16,
+                      paddingVertical: 8,
+                      borderRadius: 12,
+                      backgroundColor: THEME.surface,
+                      borderWidth: 1,
+                      borderColor: THEME.borderGlass,
+                      marginRight: 8,
+                    }}
                     onPress={() => openFolderRename(folder)}
                   >
-                    <Text className="font-bold text-black">Rename</Text>
+                    <Text
+                      style={{
+                        color: "white",
+                        fontFamily: "Manrope_Bold",
+                        fontSize: 12,
+                      }}
+                    >
+                      Rename
+                    </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    className="px-3 py-2 rounded-lg bg-red-600"
+                    style={{
+                      paddingHorizontal: 16,
+                      paddingVertical: 8,
+                      borderRadius: 12,
+                      backgroundColor: "#FF453A",
+                    }}
                     onPress={() => handleDeleteFolder(folder)}
                   >
-                    <Text className="font-bold text-white">Delete</Text>
+                    <Text
+                      style={{
+                        color: "white",
+                        fontFamily: "Manrope_Bold",
+                        fontSize: 12,
+                      }}
+                    >
+                      Delete
+                    </Text>
                   </TouchableOpacity>
                 </View>
               ))}
@@ -1082,27 +1520,68 @@ export default function AllDocumentsScreen() {
         </View>
       </Modal>
 
-      <Modal visible={folderRenameVisible} transparent animationType="slide">
-        <View className="flex-1 justify-center items-center bg-black/60">
-          <View className="bg-white p-6 rounded-[28px] w-[85%] items-center shadow-2xl">
-            <Text className="text-xl font-black text-black mb-4">
+      <Modal visible={folderRenameVisible} transparent animationType="fade">
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "rgba(0,0,0,0.8)",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: THEME.surface,
+              padding: 24,
+              borderRadius: 32,
+              width: "90%",
+              borderWidth: 1,
+              borderColor: THEME.borderGlass,
+            }}
+          >
+            <Text
+              style={{
+                color: "white",
+                fontSize: 20,
+                fontFamily: "SpaceGrotesk_Bold",
+                marginBottom: 20,
+                textAlign: "center",
+              }}
+            >
               Rename Folder
             </Text>
             <TextInput
-              className="w-full bg-neutral-100 rounded-2xl p-4 text-left text-lg font-bold mb-6"
+              style={{
+                backgroundColor: THEME.surfaceBright,
+                color: "white",
+                padding: 16,
+                borderRadius: 16,
+                fontFamily: "Manrope_Bold",
+                fontSize: 16,
+                marginBottom: 20,
+              }}
               value={folderRenameValue}
               onChangeText={setFolderRenameValue}
               placeholder="Folder name"
+              placeholderTextColor={THEME.textMuted}
             />
-            <View className="flex-row w-full gap-2">
+            <View style={{ flexDirection: "row", gap: 12 }}>
               <TouchableOpacity
-                className="flex-1 bg-neutral-200 py-4 rounded-xl items-center"
+                style={{ flex: 1, padding: 16, alignItems: "center" }}
                 onPress={() => setFolderRenameVisible(false)}
               >
-                <Text className="font-bold text-black">Cancel</Text>
+                <Text style={{ color: THEME.textMuted, fontFamily: "Manrope_Bold" }}>
+                  Cancel
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                className="flex-1 bg-black py-4 rounded-xl items-center"
+                style={{
+                  flex: 1,
+                  backgroundColor: THEME.accent,
+                  padding: 16,
+                  borderRadius: 16,
+                  alignItems: "center",
+                }}
                 onPress={() => {
                   Keyboard.dismiss();
                   handleRenameFolder();
@@ -1110,9 +1589,11 @@ export default function AllDocumentsScreen() {
                 disabled={renamingFolder}
               >
                 {renamingFolder ? (
-                  <ActivityIndicator color="white" />
+                  <ActivityIndicator color="#3d1a08" />
                 ) : (
-                  <Text className="font-bold text-white">Save</Text>
+                  <Text style={{ color: "#3d1a08", fontFamily: "SpaceGrotesk_Bold" }}>
+                    Save
+                  </Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1120,93 +1601,202 @@ export default function AllDocumentsScreen() {
         </View>
       </Modal>
 
+      {/* --- Modals for Documents --- */}
       <Modal visible={documentActionVisible} transparent animationType="slide">
-        <View className="flex-1 justify-end bg-black/40">
-          <View className="bg-white pt-6 px-6 pb-10 rounded-t-[32px]">
-            <View className="flex-row items-center justify-between mb-2">
-              <Text className="text-2xl font-black text-black">
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "flex-end",
+            backgroundColor: "rgba(0,0,0,0.8)",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: THEME.surface,
+              paddingTop: 24,
+              paddingHorizontal: 24,
+              paddingBottom: 40,
+              borderTopLeftRadius: 32,
+              borderTopRightRadius: 32,
+              borderWidth: 1,
+              borderColor: THEME.borderGlass,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 8,
+              }}
+            >
+              <Text style={{ color: "white", fontSize: 24, fontFamily: "SpaceGrotesk_Bold" }}>
                 Document Options
               </Text>
               <TouchableOpacity
                 onPress={() => {
-                  setDocumentActionVisible(false);
                   setSelectedDocument(null);
+                  setDocumentActionVisible(false);
                 }}
               >
-                <Feather name="x" size={22} color="black" />
+                <Feather name="x" size={24} color={THEME.textMuted} />
               </TouchableOpacity>
             </View>
-            <Text className="text-neutral-500 mb-6" numberOfLines={1}>
-              {selectedDocument?.name || ""}
+            <Text
+              style={{
+                color: THEME.accent,
+                fontSize: 14,
+                fontFamily: "Manrope_Bold",
+                marginBottom: 24,
+              }}
+              numberOfLines={1}
+            >
+              {selectedDocument?.name}
             </Text>
 
             <TouchableOpacity
-              className="bg-neutral-100 py-4 rounded-xl items-center mb-3"
+              style={{
+                backgroundColor: THEME.surfaceBright,
+                padding: 16,
+                borderRadius: 16,
+                alignItems: "center",
+                marginBottom: 12,
+              }}
               onPress={openRenameDocument}
             >
-              <Text className="font-bold text-black">Rename</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              className="bg-neutral-100 py-4 rounded-xl items-center mb-3"
-              onPress={openMoveModal}
-            >
-              <Text className="font-bold text-black">Move to Folder</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              className="bg-neutral-100 py-4 rounded-xl items-center mb-3"
-              onPress={openDocumentViewer}
-              disabled={openingDocument || !selectedDocument?.storage_path}
-            >
-              <Text className="font-bold text-black">
-                {openingDocument ? "Opening..." : "View"}
+              <Text style={{ color: "white", fontFamily: "Manrope_Bold", fontSize: 16 }}>
+                Rename
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              className="bg-red-600 py-4 rounded-xl items-center mb-3"
+              style={{
+                backgroundColor: THEME.surfaceBright,
+                padding: 16,
+                borderRadius: 16,
+                alignItems: "center",
+                marginBottom: 12,
+              }}
+              onPress={openMoveModal}
+            >
+              <Text style={{ color: "white", fontFamily: "Manrope_Bold", fontSize: 16 }}>
+                Move to Folder
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                backgroundColor: THEME.accent,
+                padding: 16,
+                borderRadius: 16,
+                alignItems: "center",
+                marginBottom: 12,
+              }}
+              onPress={openDocumentViewer}
+              disabled={openingDocument}
+            >
+              <Text
+                style={{ color: "#3d1a08", fontFamily: "SpaceGrotesk_Bold", fontSize: 16 }}
+              >
+                {openingDocument ? "Opening..." : "View Document"}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                backgroundColor: "#FF453A",
+                padding: 16,
+                borderRadius: 16,
+                alignItems: "center",
+              }}
               onPress={handleDeleteDocument}
               disabled={deletingDocument}
             >
               {deletingDocument ? (
                 <ActivityIndicator color="white" />
               ) : (
-                <Text className="font-bold text-white">Delete</Text>
+                <Text
+                  style={{ color: "white", fontFamily: "SpaceGrotesk_Bold", fontSize: 16 }}
+                >
+                  Delete
+                </Text>
               )}
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      <Modal visible={documentRenameVisible} transparent animationType="slide">
-        <View className="flex-1 justify-center items-center bg-black/60">
-          <View className="bg-white p-6 rounded-[28px] w-[85%] items-center shadow-2xl">
-            <Text className="text-xl font-black text-black mb-4">
+      <Modal visible={documentRenameVisible} transparent animationType="fade">
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "rgba(0,0,0,0.8)",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: THEME.surface,
+              padding: 24,
+              borderRadius: 32,
+              width: "90%",
+              borderWidth: 1,
+              borderColor: THEME.borderGlass,
+            }}
+          >
+            <Text
+              style={{
+                color: "white",
+                fontSize: 20,
+                fontFamily: "SpaceGrotesk_Bold",
+                marginBottom: 20,
+                textAlign: "center",
+              }}
+            >
               Rename Document
             </Text>
             <TextInput
-              className="w-full bg-neutral-100 rounded-2xl p-4 text-left text-lg font-bold mb-6"
+              style={{
+                backgroundColor: THEME.surfaceBright,
+                color: "white",
+                padding: 16,
+                borderRadius: 16,
+                fontFamily: "Manrope_Bold",
+                fontSize: 16,
+                marginBottom: 20,
+              }}
               value={documentRenameValue}
               onChangeText={setDocumentRenameValue}
               placeholder="Document name"
+              placeholderTextColor={THEME.textMuted}
             />
-            <View className="flex-row w-full gap-2">
+            <View style={{ flexDirection: "row", gap: 12 }}>
               <TouchableOpacity
-                className="flex-1 bg-neutral-200 py-4 rounded-xl items-center"
+                style={{ flex: 1, padding: 16, alignItems: "center" }}
                 onPress={() => setDocumentRenameVisible(false)}
               >
-                <Text className="font-bold text-black">Cancel</Text>
+                <Text style={{ color: THEME.textMuted, fontFamily: "Manrope_Bold" }}>
+                  Cancel
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                className="flex-1 bg-black py-4 rounded-xl items-center"
+                style={{
+                  flex: 1,
+                  backgroundColor: THEME.accent,
+                  padding: 16,
+                  borderRadius: 16,
+                  alignItems: "center",
+                }}
                 onPress={handleRenameDocument}
                 disabled={renamingDocument}
               >
                 {renamingDocument ? (
-                  <ActivityIndicator color="white" />
+                  <ActivityIndicator color="#3d1a08" />
                 ) : (
-                  <Text className="font-bold text-white">Save</Text>
+                  <Text style={{ color: "#3d1a08", fontFamily: "SpaceGrotesk_Bold" }}>
+                    Save
+                  </Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1214,32 +1804,90 @@ export default function AllDocumentsScreen() {
         </View>
       </Modal>
 
-      <Modal visible={moveModalVisible} transparent animationType="slide">
-        <View className="flex-1 justify-center items-center bg-black/60">
-          <View className="bg-white p-6 rounded-[32px] w-[90%] items-center shadow-2xl">
-            <Feather name="folder" size={40} color="black" className="mb-4" />
-            <Text className="text-xl font-black text-black mb-2 text-center">
-              Move to Folder
-            </Text>
-            <Text className="text-neutral-500 text-center mb-4">
-              Current destination: {moveTargetFolderName}
-            </Text>
+      <Modal visible={moveModalVisible} transparent animationType="fade">
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "rgba(0,0,0,0.8)",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: THEME.surface,
+              padding: 24,
+              borderRadius: 32,
+              width: "90%",
+              borderWidth: 1,
+              borderColor: THEME.borderGlass,
+            }}
+          >
+            <View style={{ alignItems: "center", marginBottom: 20 }}>
+              <Feather
+                name="folder"
+                size={32}
+                color={THEME.accent}
+                style={{ marginBottom: 12 }}
+              />
+              <Text
+                style={{
+                  color: "white",
+                  fontSize: 20,
+                  fontFamily: "SpaceGrotesk_Bold",
+                  textAlign: "center",
+                }}
+              >
+                Move to Folder
+              </Text>
+              <Text
+                style={{ color: THEME.textMuted, fontSize: 13, marginTop: 4 }}
+              >
+                Destination: {moveTargetFolderName}
+              </Text>
+            </View>
 
-            <ScrollView className="w-full max-h-72 mb-4">
+            <ScrollView
+              style={{ maxHeight: 250, marginBottom: 16 }}
+              showsVerticalScrollIndicator={false}
+            >
               {moveStack.length > 0 ? (
                 <TouchableOpacity
-                  className="w-full py-3 px-4 rounded-xl mb-2 bg-neutral-100 flex-row items-center"
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    padding: 16,
+                    backgroundColor: THEME.surfaceBright,
+                    borderRadius: 16,
+                    marginBottom: 8,
+                  }}
                   onPress={() => setMoveStack((prev) => prev.slice(0, -1))}
                 >
-                  <Feather name="arrow-left" size={18} color="black" />
-                  <Text className="font-bold text-black ml-2">Back</Text>
+                  <Feather name="arrow-left" size={18} color="white" />
+                  <Text
+                    style={{
+                      color: "white",
+                      fontFamily: "Manrope_Bold",
+                      marginLeft: 12,
+                    }}
+                  >
+                    Back
+                  </Text>
                 </TouchableOpacity>
               ) : null}
 
               {visibleMoveFolders.map((folder) => (
                 <TouchableOpacity
                   key={folder.id}
-                  className="w-full py-3 px-4 rounded-xl mb-2 bg-neutral-100 flex-row items-center justify-between"
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: 16,
+                    backgroundColor: THEME.surfaceBright,
+                    borderRadius: 16,
+                    marginBottom: 8,
+                  }}
                   onPress={() =>
                     setMoveStack((prev) => [
                       ...prev,
@@ -1247,34 +1895,51 @@ export default function AllDocumentsScreen() {
                     ])
                   }
                 >
-                  <Text className="font-bold text-black" numberOfLines={1}>
+                  <Text
+                    style={{ color: "white", fontFamily: "Manrope_Bold", fontSize: 15 }}
+                    numberOfLines={1}
+                  >
                     {folder.name}
                   </Text>
-                  <Feather name="chevron-right" size={18} color="black" />
+                  <Feather
+                    name="chevron-right"
+                    size={18}
+                    color={THEME.textMuted}
+                  />
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
-            <View className="flex-row w-full gap-2">
+            <View style={{ flexDirection: "row", gap: 12 }}>
               <TouchableOpacity
-                className="flex-1 bg-neutral-200 py-4 rounded-xl items-center"
+                style={{ flex: 1, padding: 16, alignItems: "center" }}
                 onPress={() => {
                   setMoveModalVisible(false);
                   setSelectedDocument(null);
                   setMoveStack([]);
                 }}
               >
-                <Text className="font-bold text-black">Cancel</Text>
+                <Text style={{ color: THEME.textMuted, fontFamily: "Manrope_Bold" }}>
+                  Cancel
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                className="flex-1 bg-black py-4 rounded-xl items-center"
+                style={{
+                  flex: 1,
+                  backgroundColor: THEME.accent,
+                  padding: 16,
+                  borderRadius: 16,
+                  alignItems: "center",
+                }}
                 onPress={handleMoveDocument}
                 disabled={movingDocument || !moveTargetFolderId}
               >
                 {movingDocument ? (
-                  <ActivityIndicator color="white" />
+                  <ActivityIndicator color="#3d1a08" />
                 ) : (
-                  <Text className="font-bold text-white">Move Here</Text>
+                  <Text style={{ color: "#3d1a08", fontFamily: "SpaceGrotesk_Bold" }}>
+                    Move Here
+                  </Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1283,65 +1948,124 @@ export default function AllDocumentsScreen() {
       </Modal>
 
       <Modal visible={noteModalVisible} transparent animationType="slide">
-        <View className="flex-1 justify-end bg-black/40">
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "flex-end",
+            backgroundColor: "rgba(0,0,0,0.8)",
+          }}
+        >
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : undefined}
-            keyboardVerticalOffset={24}
-            className="w-full"
+            style={{ width: "100%" }}
           >
-            <View className="bg-white pt-6 px-6 pb-10 rounded-t-[32px] h-[80%]">
-              <View className="flex-row justify-between items-center mb-6">
-                <Text className="text-2xl font-black text-black">
-                  Secure Note
-                </Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    Keyboard.dismiss();
-                    setNoteModalVisible(false);
-                  }}
+            <View
+              style={{
+                backgroundColor: THEME.surface,
+                paddingTop: 24,
+                paddingHorizontal: 24,
+                paddingBottom: 40,
+                borderTopLeftRadius: 32,
+                borderTopRightRadius: 32,
+                height: 600,
+                borderWidth: 1,
+                borderColor: THEME.borderGlass,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 24,
+                }}
+              >
+                <Text
+                  style={{ color: "white", fontSize: 24, fontFamily: "SpaceGrotesk_Bold" }}
                 >
-                  <Feather name="x" size={24} color="black" />
+                  Create Note
+                </Text>
+                <TouchableOpacity onPress={() => setNoteModalVisible(false)}>
+                  <Feather name="x" size={24} color={THEME.textMuted} />
                 </TouchableOpacity>
               </View>
-
               <TextInput
-                className="text-xl font-bold bg-neutral-100 p-4 rounded-xl mb-4"
-                placeholderTextColor="gray"
+                style={{
+                  backgroundColor: THEME.surfaceBright,
+                  color: "white",
+                  padding: 16,
+                  borderRadius: 16,
+                  fontFamily: "Manrope_Bold",
+                  fontSize: 18,
+                  marginBottom: 16,
+                }}
+                placeholderTextColor={THEME.textMuted}
                 placeholder="Note Title"
                 value={noteTitle}
                 onChangeText={setNoteTitle}
               />
-
               <TextInput
-                className="flex-1 text-black bg-neutral-100 p-4 rounded-xl mb-6 text-lg"
-                placeholderTextColor="gray"
+                style={{
+                  flex: 1,
+                  backgroundColor: THEME.surfaceBright,
+                  color: "white",
+                  padding: 16,
+                  borderRadius: 16,
+                  fontSize: 16,
+                  marginBottom: 24,
+                  textAlignVertical: "top",
+                }}
+                placeholderTextColor={THEME.textMuted}
                 placeholder="Write your notes here..."
                 multiline
                 returnKeyType="done"
                 blurOnSubmit
                 onSubmitEditing={Keyboard.dismiss}
-                textAlignVertical="top"
                 value={noteContent}
                 onChangeText={setNoteContent}
               />
-
-              <View className="flex-row gap-2">
+              <View style={{ flexDirection: "row", gap: 12 }}>
                 <TouchableOpacity
-                  className="flex-1 bg-neutral-200 py-4 rounded-full items-center"
+                  style={{ flex: 1, padding: 16, alignItems: "center" }}
                   onPress={() => {
                     Keyboard.dismiss();
                     setNoteModalVisible(false);
                   }}
                 >
-                  <Text className="text-black font-bold text-lg">Cancel</Text>
+                  <Text
+                    style={{
+                      color: THEME.textMuted,
+                      fontFamily: "Manrope_Bold",
+                      fontSize: 16,
+                    }}
+                  >
+                    Cancel
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  className="flex-1 bg-black py-4 rounded-full items-center"
+                  style={{
+                    flex: 1,
+                    backgroundColor: THEME.accent,
+                    padding: 16,
+                    borderRadius: 16,
+                    alignItems: "center",
+                  }}
                   onPress={handleCreateNote}
+                  disabled={uploading}
                 >
-                  <Text className="text-white font-bold text-lg">
-                    Save Note
-                  </Text>
+                  {uploading ? (
+                    <ActivityIndicator color="#3d1a08" />
+                  ) : (
+                    <Text
+                      style={{
+                        color: "#3d1a08",
+                        fontFamily: "SpaceGrotesk_Bold",
+                        fontSize: 16,
+                      }}
+                    >
+                      Save Note
+                    </Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>

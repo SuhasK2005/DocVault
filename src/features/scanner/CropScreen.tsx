@@ -12,6 +12,8 @@ import {
   View,
 } from "react-native";
 import Svg, { Polygon, Circle } from "react-native-svg";
+import { BlurView } from "expo-blur";
+import { Feather } from "@expo/vector-icons";
 import * as ImageManipulator from "expo-image-manipulator";
 import { CropPoint } from "./types";
 
@@ -23,8 +25,17 @@ type Props = {
   onCropped: (uri: string) => void;
 };
 
-const HANDLE_RADIUS = 16;
-const HANDLE_HIT = 28;
+const THEME = {
+  bg: "#0e0e0e",
+  surface: "#1a1919",
+  surfaceBright: "#2c2c2c",
+  accent: "#ff9157",
+  textMuted: "#adaaaa",
+  borderGlass: "rgba(173, 170, 170, 0.1)",
+};
+
+const HANDLE_RADIUS = 18;
+const HANDLE_HIT = 32;
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
@@ -101,17 +112,10 @@ export default function CropScreen({ imageUri, onBack, onCropped }: Props) {
   imageRectRef.current = imageRect;
 
   const panResponders = React.useRef(
-    [0, 1, 2, 3].map((index) => {
-      let initialPoint = { x: 0, y: 0 };
-      return PanResponder.create({
+    [0, 1, 2, 3].map((index) =>
+      PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: () => {
-          const currentPoints = pointsRef.current;
-          if (currentPoints[index]) {
-            initialPoint = { ...currentPoints[index] };
-          }
-        },
         onPanResponderMove: (
           _: GestureResponderEvent,
           gesture: PanResponderGestureState,
@@ -120,14 +124,16 @@ export default function CropScreen({ imageUri, onBack, onCropped }: Props) {
           if (!ir) return;
           setPoints((prev) => {
             const next = [...prev];
+            const current = prev[index];
+            if (!current) return prev;
             next[index] = {
               x: clamp(
-                initialPoint.x + gesture.dx,
+                current.x + gesture.dx,
                 ir.x,
                 ir.x + ir.width,
               ),
               y: clamp(
-                initialPoint.y + gesture.dy,
+                current.y + gesture.dy,
                 ir.y,
                 ir.y + ir.height,
               ),
@@ -135,8 +141,8 @@ export default function CropScreen({ imageUri, onBack, onCropped }: Props) {
             return next;
           });
         },
-      });
-    }),
+      }),
+    ),
   ).current;
 
   const handleReset = () => {
@@ -187,24 +193,66 @@ export default function CropScreen({ imageUri, onBack, onCropped }: Props) {
   const polyPointsStr = points.map((p) => `${p.x},${p.y}`).join(" ");
 
   return (
-    <View className="flex-1 bg-black">
-      {/* Header */}
-      <View className="flex-row items-center justify-between px-5 pt-14 pb-3">
-        <TouchableOpacity onPress={onBack}>
-          <Text className="text-white font-bold">Back</Text>
-        </TouchableOpacity>
-        <Text className="text-white font-bold text-base">Adjust Edges</Text>
+    <View style={{ flex: 1, backgroundColor: THEME.bg }}>
+      {/* Glassmorphic Header */}
+      <BlurView
+        tint="dark"
+        intensity={80}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          paddingHorizontal: 24,
+          paddingTop: 56,
+          paddingBottom: 24,
+        }}
+      >
         <TouchableOpacity
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 14,
+            backgroundColor: THEME.surfaceBright,
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: THEME.borderGlass,
+          }}
+          onPress={onBack}
+        >
+          <Feather name="arrow-left" size={20} color="white" />
+        </TouchableOpacity>
+        
+        <View style={{ alignItems: "center" }}>
+          <Text style={{ color: "white", fontSize: 18, fontFamily: "SpaceGrotesk_Bold" }}>
+            Adjust Edges
+          </Text>
+          <Text style={{ color: THEME.textMuted, fontSize: 10, fontFamily: "SpaceGrotesk_Bold", letterSpacing: 1, textTransform: "uppercase", marginTop: 2 }}>
+            CRITICAL ACCURACY
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={{
+            paddingHorizontal: 16,
+            height: 44,
+            borderRadius: 14,
+            backgroundColor: THEME.accent,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
           onPress={handleCrop}
           disabled={processing || points.length !== 4}
         >
           {processing ? (
-            <ActivityIndicator color="white" />
+            <ActivityIndicator color="#3d1a08" size="small" />
           ) : (
-            <Text className="text-cyan-400 font-bold">Next</Text>
+            <Text style={{ color: "#3d1a08", fontFamily: "SpaceGrotesk_Bold", fontSize: 14 }}>
+              NEXT
+            </Text>
           )}
         </TouchableOpacity>
-      </View>
+      </BlurView>
 
       {/* Image + Crop overlay */}
       <View className="flex-1 mx-4 mb-4" onLayout={onLayout}>
@@ -235,9 +283,9 @@ export default function CropScreen({ imageUri, onBack, onCropped }: Props) {
               {/* Crop quad outline */}
               <Polygon
                 points={polyPointsStr}
-                fill="rgba(34,211,238,0.08)"
-                stroke="#22D3EE"
-                strokeWidth={2}
+                fill="rgba(255,145,87,0.12)"
+                stroke={THEME.accent}
+                strokeWidth={3}
                 strokeLinejoin="round"
               />
 
@@ -249,15 +297,15 @@ export default function CropScreen({ imageUri, onBack, onCropped }: Props) {
                     cy={p.y}
                     r={HANDLE_RADIUS}
                     fill="white"
-                    stroke="#22D3EE"
-                    strokeWidth={3}
-                    opacity={0.9}
+                    stroke={THEME.accent}
+                    strokeWidth={4}
+                    opacity={1}
                   />
                   <Circle
                     cx={p.x}
                     cy={p.y}
-                    r={5}
-                    fill="#22D3EE"
+                    r={6}
+                    fill={THEME.accent}
                   />
                 </React.Fragment>
               ))}
@@ -282,22 +330,43 @@ export default function CropScreen({ imageUri, onBack, onCropped }: Props) {
       </View>
 
       {/* Bottom actions */}
-      <View className="flex-row items-center justify-center pb-8" style={{ gap: 16 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingBottom: 40, paddingTop: 20, gap: 16 }}>
         <TouchableOpacity
-          className="px-5 py-3 rounded-xl bg-neutral-800 border border-neutral-600"
+          style={{
+            paddingHorizontal: 24,
+            height: 52,
+            borderRadius: 16,
+            backgroundColor: THEME.surface,
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: THEME.borderGlass,
+          }}
           onPress={handleReset}
         >
-          <Text className="text-white font-bold text-sm">Reset</Text>
+          <Text style={{ color: "white", fontFamily: "SpaceGrotesk_Bold", fontSize: 14 }}>
+            RESET
+          </Text>
         </TouchableOpacity>
+
         <TouchableOpacity
-          className="px-8 py-3 rounded-xl bg-cyan-500"
+          style={{
+            paddingHorizontal: 32,
+            height: 52,
+            borderRadius: 16,
+            backgroundColor: THEME.accent,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
           onPress={handleCrop}
           disabled={processing || points.length !== 4}
         >
           {processing ? (
-            <ActivityIndicator color="white" size="small" />
+            <ActivityIndicator color="#3d1a08" size="small" />
           ) : (
-            <Text className="text-white font-bold text-sm">Crop & Continue</Text>
+            <Text style={{ color: "#3d1a08", fontFamily: "SpaceGrotesk_Bold", fontSize: 14 }}>
+              CROP & CONTINUE
+            </Text>
           )}
         </TouchableOpacity>
       </View>

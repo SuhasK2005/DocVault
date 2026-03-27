@@ -16,6 +16,7 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { WebView } from "react-native-webview";
+import { BlurView } from "expo-blur";
 import { supabase } from "../services/supabase";
 
 let PdfComponent: any = null;
@@ -98,6 +99,15 @@ const getDocumentCachePath = async (storagePath: string, fileName: string) => {
   const encodedKey = encodeURIComponent(storagePath);
 
   return `${DOCUMENT_CACHE_DIR}/${encodedKey}__${normalizedName}`;
+};
+
+const THEME = {
+  bg: "#0e0e0e",
+  surface: "#1a1919",
+  surfaceBright: "#2c2c2c",
+  accent: "#ff9157",
+  textMuted: "#adaaaa",
+  borderGlass: "rgba(173, 170, 170, 0.1)",
 };
 
 export default function DocumentViewerScreen() {
@@ -241,27 +251,76 @@ export default function DocumentViewerScreen() {
   const renderBody = () => {
     if (error) {
       return (
-        <View className="flex-1 items-center justify-center px-8">
-          <Text className="text-white text-lg font-bold mb-2 text-center">
-            Unable to open file
-          </Text>
-          <Text className="text-neutral-400 text-center mb-6">{error}</Text>
-          <TouchableOpacity
-            className="bg-white py-3 px-6 rounded-xl"
-            onPress={loadDocument}
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}>
+          <View
+            style={{
+              backgroundColor: THEME.surface,
+              padding: 32,
+              borderRadius: 32,
+              borderWidth: 1,
+              borderColor: THEME.borderGlass,
+              alignItems: "center",
+              width: "100%",
+            }}
           >
-            <Text className="text-black font-bold">Retry</Text>
-          </TouchableOpacity>
+            <Feather
+              name="alert-triangle"
+              size={48}
+              color="#FF453A"
+              style={{ marginBottom: 20 }}
+            />
+            <Text
+              style={{
+                color: "white",
+                fontSize: 20,
+                fontFamily: "SpaceGrotesk_Bold",
+                marginBottom: 8,
+                textAlign: "center",
+              }}
+            >
+              Vault Error
+            </Text>
+            <Text
+              style={{
+                color: THEME.textMuted,
+                textAlign: "center",
+                marginBottom: 24,
+                fontFamily: "Manrope_Bold",
+              }}
+            >
+              {error}
+            </Text>
+            <TouchableOpacity
+              style={{
+                backgroundColor: THEME.accent,
+                paddingVertical: 14,
+                paddingHorizontal: 32,
+                borderRadius: 16,
+              }}
+              onPress={loadDocument}
+            >
+              <Text style={{ color: "#3d1a08", fontFamily: "SpaceGrotesk_Bold" }}>
+                Retry Access
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       );
     }
 
     if (loading) {
       return (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#ffffff" />
-          <Text className="text-neutral-400 mt-3 font-semibold">
-            Loading document...
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator size="large" color={THEME.accent} />
+          <Text
+            style={{
+              color: THEME.textMuted,
+              marginTop: 16,
+              fontFamily: "SpaceGrotesk_Bold",
+              letterSpacing: 1,
+            }}
+          >
+            DECRYPTING...
           </Text>
         </View>
       );
@@ -279,31 +338,41 @@ export default function DocumentViewerScreen() {
       if (!PdfComponent) {
         if (!remotePdfUrl) {
           return (
-            <View className="flex-1 items-center justify-center px-8">
-              <ActivityIndicator size="large" color="#ffffff" />
-              <Text className="text-neutral-400 mt-3 font-semibold">
-                Preparing PDF viewer...
-              </Text>
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+              <ActivityIndicator size="large" color={THEME.accent} />
             </View>
           );
         }
 
         const gviewUrl = `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(
-          remotePdfUrl,
+          remotePdfUrl
         )}`;
 
         return (
-          <View className="flex-1 bg-neutral-950 rounded-2xl overflow-hidden">
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: THEME.surface,
+              borderRadius: 24,
+              overflow: "hidden",
+              borderWidth: 1,
+              borderColor: THEME.borderGlass,
+            }}
+          >
             <WebView
               source={{ uri: gviewUrl }}
               originWhitelist={["*"]}
               startInLoadingState
               renderLoading={() => (
-                <View className="flex-1 items-center justify-center bg-neutral-950">
-                  <ActivityIndicator size="large" color="#ffffff" />
-                  <Text className="text-neutral-400 mt-3 font-semibold">
-                    Loading PDF...
-                  </Text>
+                <View
+                  style={{
+                    flex: 1,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: THEME.bg,
+                  }}
+                >
+                  <ActivityIndicator size="large" color={THEME.accent} />
                 </View>
               )}
             />
@@ -312,7 +381,16 @@ export default function DocumentViewerScreen() {
       }
 
       return (
-        <View className="flex-1 bg-neutral-950 rounded-2xl overflow-hidden">
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: THEME.surface,
+            borderRadius: 24,
+            overflow: "hidden",
+            borderWidth: 1,
+            borderColor: THEME.borderGlass,
+          }}
+        >
           <PdfComponent
             source={{ uri: localUri, cache: true }}
             style={{ flex: 1 }}
@@ -324,7 +402,18 @@ export default function DocumentViewerScreen() {
 
     if (kind === "image") {
       return (
-        <View className="flex-1 items-center justify-center bg-neutral-950 rounded-2xl overflow-hidden">
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: THEME.surface,
+            borderRadius: 24,
+            overflow: "hidden",
+            borderWidth: 1,
+            borderColor: THEME.borderGlass,
+          }}
+        >
           <Image
             source={{ uri: localUri }}
             style={{ width: "100%", height: "100%" }}
@@ -336,27 +425,49 @@ export default function DocumentViewerScreen() {
 
     if (kind === "text") {
       return (
-        <View className="flex-1 bg-neutral-950 rounded-2xl px-4 py-4">
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: THEME.surface,
+            borderRadius: 24,
+            padding: 24,
+            borderWidth: 1,
+            borderColor: THEME.borderGlass,
+          }}
+        >
           {isEditingText ? (
             <TextInput
-              className="flex-1 text-neutral-100 text-base leading-6"
+              style={{
+                flex: 1,
+                color: "white",
+                fontSize: 16,
+                fontFamily: "Manrope_Bold",
+                lineHeight: 24,
+              }}
               multiline
               autoFocus
               textAlignVertical="top"
               value={textDraft}
               onChangeText={setTextDraft}
-              placeholder="Start typing..."
-              placeholderTextColor="#737373"
+              placeholder="Secure entry..."
+              placeholderTextColor={THEME.textMuted}
             />
           ) : (
             <TouchableOpacity
               activeOpacity={0.95}
-              className="flex-1"
+              style={{ flex: 1 }}
               onPress={handleEditText}
             >
               <ScrollView showsVerticalScrollIndicator={false}>
-                <Text className="text-neutral-100 text-base leading-6">
-                  {textContent || "Tap to edit this note."}
+                <Text
+                  style={{
+                    color: "white",
+                    fontSize: 16,
+                    fontFamily: "Manrope_Bold",
+                    lineHeight: 24,
+                  }}
+                >
+                  {textContent || "This vault entry is empty. Tap to edit."}
                 </Text>
               </ScrollView>
             </TouchableOpacity>
@@ -367,7 +478,7 @@ export default function DocumentViewerScreen() {
 
     return (
       <View className="flex-1 items-center justify-center px-8">
-        <Text className="text-white text-lg font-bold mb-2 text-center">
+        <Text className="text-white text-lg font-[Manrope_Bold] mb-2 text-center">
           Unsupported Preview Type
         </Text>
         <Text className="text-neutral-400 text-center mb-6">
@@ -378,58 +489,119 @@ export default function DocumentViewerScreen() {
           className="bg-white py-3 px-6 rounded-xl"
           onPress={openWithFallback}
         >
-          <Text className="text-black font-bold">Open File</Text>
+          <Text className="text-black font-[Manrope_Bold]">Open File</Text>
         </TouchableOpacity>
       </View>
     );
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-[#0A0A0A]">
+    <SafeAreaView style={{ flex: 1, backgroundColor: THEME.bg }}>
       <StatusBar style="light" />
 
-      <View className="px-5 pt-2 pb-4 flex-row items-center justify-between">
-        <TouchableOpacity
-          className="w-11 h-11 rounded-xl border border-neutral-800 items-center justify-center"
-          onPress={() => navigation.goBack()}
+      {/* Glassmorphic Header */}
+      <View style={{ position: "relative", zIndex: 10 }}>
+        <BlurView
+          tint="dark"
+          intensity={80}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            paddingHorizontal: 24,
+            paddingTop: 16,
+            paddingBottom: 24,
+          }}
         >
-          <Feather name="arrow-left" size={20} color="#FAFAFA" />
-        </TouchableOpacity>
-
-        <View className="flex-1 mx-4">
-          <Text className="text-white text-base font-bold" numberOfLines={1}>
-            {params?.name || "Document Viewer"}
-          </Text>
-          <Text className="text-neutral-500 text-xs mt-1 uppercase tracking-wide">
-            {kind === "unsupported" ? "External Viewer" : `${kind} preview`}
-          </Text>
-        </View>
-
-        {kind === "text" ? (
           <TouchableOpacity
-            className="px-4 h-11 rounded-xl border bg-orange-500 border-neutral-800 items-center justify-center"
-            onPress={isEditingText ? handleSaveText : handleEditText}
-            disabled={savingText}
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 16,
+              backgroundColor: THEME.surfaceBright,
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: 1,
+              borderColor: THEME.borderGlass,
+            }}
+            onPress={() => navigation.goBack()}
           >
-            {savingText ? (
-              <ActivityIndicator size="small" color="#FAFAFA" />
-            ) : (
-              <Text className="text-neutral-100 font-bold">
-                {isEditingText ? "Save" : "Edit"}
-              </Text>
-            )}
+            <Feather name="arrow-left" size={20} color="white" />
           </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            className="w-11 h-11 rounded-xl border border-neutral-800 items-center justify-center"
-            onPress={openWithFallback}
-          >
-            <Feather name="share-2" size={18} color="#FAFAFA" />
-          </TouchableOpacity>
-        )}
+
+          <View style={{ flex: 1, marginHorizontal: 16 }}>
+            <Text
+              style={{
+                color: "white",
+                fontSize: 18,
+                fontFamily: "SpaceGrotesk_Bold",
+              }}
+              numberOfLines={1}
+            >
+              {params?.name || "Vault Document"}
+            </Text>
+            <Text
+              style={{
+                color: THEME.textMuted,
+                fontSize: 10,
+                fontFamily: "SpaceGrotesk_Bold",
+                marginTop: 2,
+                letterSpacing: 1,
+                textTransform: "uppercase",
+              }}
+            >
+              {kind === "unsupported" ? "External Link" : `${kind} ACCESS`}
+            </Text>
+          </View>
+
+          {kind === "text" ? (
+            <TouchableOpacity
+              style={{
+                paddingHorizontal: 20,
+                height: 48,
+                borderRadius: 16,
+                backgroundColor: THEME.accent,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              onPress={isEditingText ? handleSaveText : handleEditText}
+              disabled={savingText}
+            >
+              {savingText ? (
+                <ActivityIndicator size="small" color="#3d1a08" />
+              ) : (
+                <Text
+                  style={{
+                    color: "#3d1a08",
+                    fontFamily: "SpaceGrotesk_Bold",
+                    fontSize: 14,
+                  }}
+                >
+                  {isEditingText ? "SYNC" : "EDIT"}
+                </Text>
+              )}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 16,
+                backgroundColor: THEME.surfaceBright,
+                alignItems: "center",
+                justifyContent: "center",
+                borderWidth: 1,
+                borderColor: THEME.borderGlass,
+              }}
+              onPress={openWithFallback}
+            >
+              <Feather name="share-2" size={20} color="white" />
+            </TouchableOpacity>
+          )}
+        </BlurView>
       </View>
 
-      <View className="flex-1 px-4 pb-4">{renderBody()}</View>
+      <View style={{ flex: 1, padding: 24 }}>{renderBody()}</View>
     </SafeAreaView>
   );
 }

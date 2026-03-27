@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   InteractionManager,
   Keyboard,
   KeyboardAvoidingView,
@@ -17,6 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import { useNavigation } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
@@ -44,6 +46,7 @@ export default function DashboardScreen() {
 
   const [documentsCount, setDocumentsCount] = useState(0);
   const [folders, setFolders] = useState<FolderNode[]>([]);
+  const [recentDocs, setRecentDocs] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
 
   const [folderPickerVisible, setFolderPickerVisible] = useState(false);
@@ -77,7 +80,7 @@ export default function DashboardScreen() {
 
   const currentPickerFolderId = useMemo(
     () => (pickerStack.length ? pickerStack[pickerStack.length - 1].id : null),
-    [pickerStack],
+    [pickerStack]
   );
 
   const currentPickerFolderName = useMemo(
@@ -85,12 +88,12 @@ export default function DashboardScreen() {
       pickerStack.length
         ? pickerStack[pickerStack.length - 1].name
         : "File Hub",
-    [pickerStack],
+    [pickerStack]
   );
 
   const visiblePickerFolders = useMemo(() => {
     return folders.filter(
-      (folder) => (folder.parent_id || null) === currentPickerFolderId,
+      (folder) => (folder.parent_id || null) === currentPickerFolderId
     );
   }, [folders, currentPickerFolderId]);
 
@@ -118,6 +121,23 @@ export default function DashboardScreen() {
       setDocumentsCount(count || 0);
     } catch {
       setDocumentsCount(0);
+    }
+  };
+
+  const fetchRecentDocuments = async () => {
+    if (!user?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from("documents")
+        .select("id, name, size_bytes, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(5);
+
+      if (error) throw error;
+      setRecentDocs(data || []);
+    } catch {
+      setRecentDocs([]);
     }
   };
 
@@ -153,7 +173,7 @@ export default function DashboardScreen() {
             name: folder.name,
             parent_id: null,
             created_at: folder.created_at,
-          })),
+          }))
         );
         return;
       }
@@ -167,6 +187,7 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     fetchDocumentsCount();
+    fetchRecentDocuments();
     fetchFolders();
   }, [user?.id]);
 
@@ -256,7 +277,7 @@ export default function DashboardScreen() {
           }
 
           await new Promise((resolve) =>
-            setTimeout(resolve, 500 + attempt * 250),
+            setTimeout(resolve, 500 + attempt * 250)
           );
         } finally {
           globalDocumentPickerActive = false;
@@ -306,7 +327,7 @@ export default function DashboardScreen() {
       if (!permission.granted) {
         Alert.alert(
           "Permission Required",
-          "Gallery access is needed to pick images",
+          "Gallery access is needed to pick images"
         );
         return;
       }
@@ -482,7 +503,7 @@ export default function DashboardScreen() {
     if (!supportsNestedFolders && createParentId) {
       Alert.alert(
         "Schema Update Needed",
-        "Nested folders need folders.parent_id in your database. Run migration 03_nested_folders.sql and try again.",
+        "Nested folders need folders.parent_id in your database. Run migration 03_nested_folders.sql and try again."
       );
       return;
     }
@@ -569,310 +590,641 @@ export default function DashboardScreen() {
     executeActionForFolder(folder.id);
   };
 
-  return (
-    <SafeAreaView className="flex-1 bg-[#F4F4F5]">
-      <StatusBar style="dark" />
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB", "TB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
 
-      <View className="flex-row justify-between items-end px-8 pt-6 pb-4">
-        <View>
-          <Text className="text-sm text-neutral-500 font-bold uppercase tracking-widest mb-1">
-            Status: Encrypted
-          </Text>
-          <Text className="text-4xl font-black text-black tracking-tighter">
-            My Vault.
+  const formatTimeAgo = (dateString: string) => {
+    const seconds = Math.floor(
+      (new Date().getTime() - new Date(dateString).getTime()) / 1000
+    );
+    let interval = seconds / 31536000;
+    if (interval > 1) return Math.floor(interval) + "y ago";
+    interval = seconds / 2592000;
+    if (interval > 1) return Math.floor(interval) + "mo ago";
+    interval = seconds / 86400;
+    if (interval > 1) return Math.floor(interval) + "d ago";
+    interval = seconds / 3600;
+    if (interval > 1) return Math.floor(interval) + "h ago";
+    interval = seconds / 60;
+    if (interval > 1) return Math.floor(interval) + "m ago";
+    return Math.floor(seconds) + "s ago";
+  };
+
+  const getDocIconAndColor = (name: string) => {
+    const ext = name.split(".").pop()?.toLowerCase();
+    if (ext === "pdf") return { name: "file-text", color: "#FF7C3D" }; // Primary Orange
+    if (["jpg", "jpeg", "png"].includes(ext || ""))
+      return { name: "image", color: "#4F46E5" }; // Indigo
+    if (ext === "zip") return { name: "archive", color: "#06B6D4" }; // Cyan
+    return { name: "file", color: "#A1A1AA" };
+  };
+
+  const THEME = {
+    bg: "#0e0e0e",
+    surface: "#1a1919",
+    surfaceBright: "#2c2c2c",
+    accent: "#ff9157",
+    textMuted: "#adaaaa",
+    borderGlass: "rgba(173, 170, 170, 0.1)",
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: THEME.bg }}>
+      <StatusBar style="light" />
+
+      {/* Top Bar */}
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          paddingHorizontal: 24,
+          paddingTop: 60,
+          paddingBottom: 20,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Feather name="shield" size={20} color={THEME.accent} />
+          <Text
+            style={{
+              color: THEME.accent,
+              fontSize: 20,
+              fontFamily: "SpaceGrotesk_Bold",
+              marginLeft: 8,
+              letterSpacing: -0.5,
+            }}
+          >
+            DOCVAULT
           </Text>
         </View>
-        <TouchableOpacity
-          className="w-14 h-14 bg-black rounded-full items-center justify-center shadow-lg shadow-black/20"
-          onPress={lockVault}
-          activeOpacity={0.8}
-        >
-          <Feather name="lock" size={22} color="white" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+          <Feather name="search" size={22} color={THEME.textMuted} />
+          {user?.user_metadata?.avatar_url ? (
+            <Image
+              source={{ uri: user.user_metadata.avatar_url }}
+              style={{ width: 32, height: 32, borderRadius: 16 }}
+            />
+          ) : (
+            <View
+              style={{
+                width: 32,
+                height: 32,
+                backgroundColor: THEME.surfaceBright,
+                borderRadius: 16,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Feather name="user" size={16} color="white" />
+            </View>
+          )}
+        </View>
       </View>
 
-      <ScrollView
-        className="flex-1 px-6 pt-4"
-        showsVerticalScrollIndicator={false}
-      >
-        <View className="flex-row justify-between mb-4">
-          <View className="w-[48%]">
+      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+        {/* Header Section */}
+        <View style={{ paddingHorizontal: 24, paddingBottom: 32 }}>
+          <Text
+            style={{
+              color: THEME.accent,
+              fontFamily: "SpaceGrotesk_Bold",
+              fontSize: 10,
+              letterSpacing: 4,
+              marginBottom: 8,
+              textTransform: "uppercase",
+            }}
+          >
+            Access Granted
+          </Text>
+          <Text
+            style={{
+              fontSize: 40,
+              fontFamily: "SpaceGrotesk_Bold",
+              color: "white",
+              letterSpacing: -1.5,
+              marginBottom: 16,
+            }}
+          >
+            The Curator
+          </Text>
+
+          {/* Status Pill */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: THEME.surface,
+              paddingVertical: 10,
+              paddingHorizontal: 16,
+              borderRadius: 16,
+              alignSelf: "flex-start",
+              borderWidth: 1,
+              borderColor: THEME.borderGlass,
+            }}
+          >
+            <View
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: THEME.accent,
+                marginRight: 8,
+                shadowColor: THEME.accent,
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.8,
+                shadowRadius: 6,
+                elevation: 4,
+              }}
+            />
+            <Text
+              style={{
+                color: THEME.textMuted,
+                fontSize: 12,
+                fontFamily: "Manrope_Bold",
+              }}
+            >
+              System Secure • Vault Tier 1
+            </Text>
+          </View>
+        </View>
+
+        {/* Quick Actions Component */}
+        <View
+          style={{
+            flexDirection: "row",
+            paddingHorizontal: 24,
+            paddingBottom: 40,
+            gap: 12,
+          }}
+        >
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => openFolderPicker("scan")}
+            style={{
+              flex: 1,
+              backgroundColor: THEME.surface,
+              paddingVertical: 24,
+              borderRadius: 20,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Feather
+              name="maximize"
+              size={24}
+              color={THEME.accent}
+              style={{ marginBottom: 12 }}
+            />
+            <Text
+              style={{
+                color: THEME.accent,
+                fontSize: 10,
+                fontFamily: "SpaceGrotesk_Bold",
+                textAlign: "center",
+                lineHeight: 14,
+              }}
+            >
+              SCAN{"\n"}DOCUMENT
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => openFolderPicker("uploadFiles")}
+            style={{
+              flex: 1,
+              backgroundColor: THEME.surface,
+              paddingVertical: 24,
+              borderRadius: 20,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Feather
+              name="upload-cloud"
+              size={24}
+              color={THEME.accent}
+              style={{ marginBottom: 12 }}
+            />
+            <Text
+              style={{
+                color: THEME.accent,
+                fontSize: 10,
+                fontFamily: "SpaceGrotesk_Bold",
+                textAlign: "center",
+                lineHeight: 14,
+              }}
+            >
+              UPLOAD{"\n"}FILE
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => openFolderPicker("note")}
+            style={{
+              flex: 1,
+              backgroundColor: THEME.surface,
+              paddingVertical: 24,
+              borderRadius: 20,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Feather
+              name="file-text"
+              size={24}
+              color={THEME.accent}
+              style={{ marginBottom: 12 }}
+            />
+            <Text
+              style={{
+                color: THEME.accent,
+                fontSize: 10,
+                fontFamily: "SpaceGrotesk_Bold",
+                textAlign: "center",
+                lineHeight: 14,
+              }}
+            >
+              ADD{"\n"}NOTE
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Vault Folders Horizontal Scroll */}
+        <View className="px-6 mb-8">
+          <View className="flex-row justify-between items-end mb-4">
+            <Text
+              style={{
+                color: "white",
+                fontSize: 20,
+                fontFamily: "SpaceGrotesk_Bold",
+                letterSpacing: -0.5,
+              }}
+            >
+              Vault Folders
+            </Text>
             <TouchableOpacity
-              activeOpacity={0.85}
               onPress={() => navigation.navigate("AllDocuments")}
             >
-              <LinearGradient
-                colors={["#18181B", "#27272A"]}
-                className="p-6 rounded-[32px] h-[180px] justify-between shadow-xl shadow-neutral-900/10"
+              <Text
+                style={{ color: THEME.accent, fontFamily: "Manrope_Bold", fontSize: 13 }}
               >
-                <View className="w-12 h-12 bg-white/10 rounded-full items-center justify-center">
-                  <Feather name="folder" size={24} color="white" />
-                </View>
-                <View>
-                  <Text className="text-white text-3xl font-black mb-1">
-                    {documentsCount}
-                  </Text>
-                  <Text className="text-neutral-400 font-bold text-sm">
-                    Documents
-                  </Text>
-                </View>
-              </LinearGradient>
+                See All
+              </Text>
             </TouchableOpacity>
           </View>
 
-          <View className="w-[48%] flex-col justify-between">
-            <View className="bg-white p-5 rounded-[28px] h-[85px] mb-2 justify-center border border-neutral-200 shadow-sm">
-              <View className="flex-row items-center justify-between">
-                <Feather name="folder-plus" size={22} color="#059669" />
-                <Text className="text-2xl font-black text-black">
-                  {folders.length}
-                </Text>
-              </View>
-              <Text className="text-neutral-500 font-bold text-xs mt-1">
-                Folders
-              </Text>
-            </View>
-            <View className="bg-white p-5 rounded-[28px] h-[85px] justify-center border border-neutral-200 shadow-sm">
-              <View className="flex-row items-center justify-between">
-                <Feather name="layers" size={22} color="#4F46E5" />
-              </View>
-              <Text className="text-neutral-500 font-bold text-xs mt-1">
-                File Hub
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View className="bg-white rounded-full p-2 flex-row justify-between items-center mb-8 shadow-lg shadow-neutral-200/50 border border-neutral-100">
-          <TouchableOpacity
-            className="flex-1 py-4 items-center rounded-full bg-neutral-100/50 flex-row justify-center mx-1"
-            onPress={() => openFolderPicker("uploadFiles")}
-            disabled={
-              uploading ||
-              launchingAction ||
-              documentPickerBusy ||
-              mediaPickerBusy
-            }
-          >
-            {uploading ? (
-              <ActivityIndicator color="black" size="small" />
-            ) : (
-              <Feather name="upload" size={18} color="black" />
-            )}
-            <Text className="font-bold text-black ml-2">Upload</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            className="w-14 h-14 bg-black rounded-full items-center justify-center mx-1"
-            onPress={() => openFolderPicker("scan")}
-            disabled={
-              uploading ||
-              launchingAction ||
-              documentPickerBusy ||
-              mediaPickerBusy
-            }
-          >
-            <Feather name="camera" size={24} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            className="flex-1 py-4 items-center rounded-full bg-neutral-100/50 flex-row justify-center mx-1"
-            onPress={() => openFolderPicker("note")}
-            disabled={
-              uploading ||
-              launchingAction ||
-              documentPickerBusy ||
-              mediaPickerBusy
-            }
-          >
-            <Feather name="edit-2" size={18} color="black" />
-            <Text className="font-bold text-black ml-2">Note</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View className="flex-row items-center justify-between mb-4 px-2">
-          <Text className="text-xl font-black text-black tracking-tight">
-            Recent Folders
-          </Text>
-          <TouchableOpacity onPress={() => navigation.navigate("AllDocuments")}>
-            <Text className="text-black font-bold">See All</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View className="mb-4">
           {recentFolders.length === 0 ? (
-            <View className="bg-white rounded-[24px] p-5 border border-neutral-100">
-              <Text className="text-black font-bold text-lg">
-                No folders yet
-              </Text>
-              <Text className="text-neutral-500 mt-1">
-                Create your first folder to start organizing files.
-              </Text>
+            <View
+              style={{
+                backgroundColor: THEME.surface,
+                borderRadius: 24,
+                padding: 24,
+                alignItems: "center",
+                borderWidth: 1,
+                borderColor: THEME.borderGlass,
+              }}
+            >
+              <Text style={{ color: THEME.textMuted }}>No folders yet.</Text>
             </View>
           ) : (
-            recentFolders.map((folder) => (
-              <TouchableOpacity
-                key={folder.id}
-                onPress={() =>
-                  navigation.navigate("AllDocuments", {
-                    openFolderId: folder.id,
-                  })
-                }
-                className="flex-row items-center p-4 bg-white rounded-[24px] mb-3 shadow-sm border border-neutral-100"
-              >
-                <View className="w-14 h-14 rounded-2xl items-center justify-center mr-4 bg-[#18181B]">
-                  <Feather name="folder" size={24} color="white" />
-                </View>
-                <View className="flex-1">
-                  <Text
-                    className="text-black font-bold text-lg mb-1"
-                    numberOfLines={1}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ overflow: "visible" }}
+            >
+              {recentFolders.map((folder, index) => (
+                <TouchableOpacity
+                  key={folder.id}
+                  activeOpacity={0.8}
+                  onPress={() =>
+                    navigation.navigate("AllDocuments", {
+                      openFolderId: folder.id,
+                    })
+                  }
+                  style={{
+                    backgroundColor: THEME.surface,
+                    borderRadius: 24,
+                    padding: 20,
+                    width: 140,
+                    height: 140,
+                    marginRight: 16,
+                    borderWidth: 1,
+                    borderColor: THEME.borderGlass,
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 44,
+                      height: 44,
+                      backgroundColor: THEME.surfaceBright,
+                      borderRadius: 16,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
                   >
-                    {folder.name}
-                  </Text>
-                  <Text className="text-neutral-500 font-bold text-xs">
-                    Open folder
-                  </Text>
-                </View>
-                <View className="w-10 h-10 items-center justify-center bg-neutral-50 rounded-full">
-                  <Feather name="chevron-right" size={20} color="black" />
-                </View>
-              </TouchableOpacity>
-            ))
+                    <Feather name="folder" size={20} color="white" />
+                  </View>
+                  <View>
+                    <Text
+                      style={{
+                        color: "white",
+                        fontFamily: "Manrope_Bold",
+                        fontSize: 15,
+                        marginBottom: 4,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {folder.name}
+                    </Text>
+                    <Text style={{ color: THEME.textMuted, fontSize: 11 }}>
+                      Encrypted
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           )}
         </View>
 
-        <View className="mb-20 flex-row gap-3">
-          <TouchableOpacity
-            className="flex-1 bg-black py-4 rounded-2xl items-center"
-            onPress={() => navigation.navigate("AllDocuments")}
-          >
-            <Text className="text-white font-bold">See All Folders</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            className="flex-1 bg-white py-4 rounded-2xl items-center border border-neutral-200"
-            onPress={() => {
-              setCreateParentId(null);
-              setFolderCreateVisible(true);
+        {/* Recent Activity List */}
+        <View className="px-6 pb-32">
+          <Text
+            style={{
+              color: "white",
+              fontSize: 20,
+              fontFamily: "SpaceGrotesk_Bold",
+              letterSpacing: -0.5,
+              marginBottom: 16,
             }}
           >
-            <Text className="text-black font-bold">Create Folder</Text>
-          </TouchableOpacity>
+            Recent Activity
+          </Text>
+
+          {recentDocs.length === 0 ? (
+            <View className="items-center py-6">
+              <Text style={{ color: THEME.textMuted }}>
+                No recent documents.
+              </Text>
+            </View>
+          ) : (
+            recentDocs.map((doc) => {
+              const { name, color } = getDocIconAndColor(doc.name);
+              return (
+                <View
+                  key={doc.id}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingVertical: 16,
+                    borderBottomWidth: 1,
+                    borderColor: "rgba(255,255,255,0.05)",
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 48,
+                      height: 48,
+                      backgroundColor: "rgba(255,255,255,0.03)",
+                      borderRadius: 16,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 16,
+                    }}
+                  >
+                    <Feather name={name as any} size={20} color={color} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        color: "white",
+                        fontSize: 15,
+                        fontFamily: "Manrope_Bold",
+                        marginBottom: 4,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {doc.name}
+                    </Text>
+                    <Text style={{ color: THEME.textMuted, fontSize: 12 }}>
+                      Added {formatTimeAgo(doc.created_at)} •{" "}
+                      {formatBytes(doc.size_bytes)}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })
+          )}
         </View>
       </ScrollView>
 
-      <Modal visible={folderPickerVisible} transparent animationType="slide">
-        <View className="flex-1 justify-center items-center bg-black/60">
-          <View className="bg-white p-6 rounded-[32px] w-[90%] items-center shadow-2xl">
-            <Feather name="folder" size={40} color="black" className="mb-4" />
-            <Text className="text-xl font-black text-black mb-2 text-center">
-              Choose Destination Folder
-            </Text>
-            <Text className="text-neutral-500 text-center mb-4">
-              Current: {currentPickerFolderName}
-            </Text>
+      {/* --- Modals --- */}
+      {/* Target Folder Picker Modal */}
+      <Modal visible={folderPickerVisible} transparent animationType="fade">
+        <View className="flex-1 justify-center items-center bg-black/80">
+          <View
+            style={{
+              backgroundColor: THEME.surface,
+              padding: 24,
+              borderRadius: 32,
+              width: "90%",
+              borderWidth: 1,
+              borderColor: THEME.borderGlass,
+            }}
+          >
+            <View className="items-center mb-6">
+              <Feather
+                name="folder"
+                size={32}
+                color={THEME.accent}
+                style={{ marginBottom: 12 }}
+              />
+              <Text
+                style={{
+                  color: "white",
+                  fontSize: 20,
+                  fontFamily: "SpaceGrotesk_Bold",
+                  textAlign: "center",
+                  marginBottom: 4,
+                }}
+              >
+                Select Destination
+              </Text>
+              <Text style={{ color: THEME.textMuted, fontSize: 13 }}>
+                Current: {currentPickerFolderName}
+              </Text>
+            </View>
 
-            <ScrollView className="w-full max-h-72 mb-4">
-              {pickerStack.length > 0 ? (
+            <ScrollView style={{ maxHeight: 200, marginBottom: 16 }}>
+              {pickerStack.length > 0 && (
                 <TouchableOpacity
-                  className="w-full py-3 px-4 rounded-xl mb-2 bg-neutral-100 flex-row items-center"
-                  onPress={() => {
-                    setPickerStack((prev) => prev.slice(0, -1));
+                  style={{
+                    padding: 16,
+                    backgroundColor: THEME.surfaceBright,
+                    borderRadius: 16,
+                    marginBottom: 8,
+                    flexDirection: "row",
+                    alignItems: "center",
                   }}
+                  onPress={() => setPickerStack((prev) => prev.slice(0, -1))}
                 >
-                  <Feather name="arrow-left" size={18} color="black" />
-                  <Text className="font-bold text-black ml-2">Back</Text>
+                  <Feather name="arrow-left" size={16} color="white" />
+                  <Text
+                    style={{ color: "white", fontFamily: "Manrope_Bold", marginLeft: 8 }}
+                  >
+                    Back Up
+                  </Text>
                 </TouchableOpacity>
-              ) : null}
+              )}
 
               {visiblePickerFolders.map((folder) => (
                 <TouchableOpacity
                   key={folder.id}
-                  className="w-full py-3 px-4 rounded-xl mb-2 bg-neutral-100 flex-row items-center justify-between"
+                  style={{
+                    padding: 16,
+                    backgroundColor: THEME.surfaceBright,
+                    borderRadius: 16,
+                    marginBottom: 8,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
                   onPress={() => handlePickerFolderTap(folder)}
                 >
                   <Text
-                    className="font-bold text-black flex-1"
+                    style={{ color: "white", fontFamily: "Manrope_Bold" }}
                     numberOfLines={1}
                   >
                     {folder.name}
                   </Text>
-                  {foldersWithChildren.has(folder.id) ? (
-                    <Feather name="chevron-right" size={18} color="black" />
-                  ) : null}
+                  {foldersWithChildren.has(folder.id) && (
+                    <Feather
+                      name="chevron-right"
+                      size={16}
+                      color={THEME.textMuted}
+                    />
+                  )}
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
-            <View className="flex-row w-full gap-2">
+            <View style={{ flexDirection: "row", gap: 12 }}>
               <TouchableOpacity
-                className="flex-1 bg-neutral-200 py-4 rounded-xl items-center"
+                style={{
+                  flex: 1,
+                  backgroundColor: THEME.surfaceBright,
+                  padding: 16,
+                  borderRadius: 16,
+                  alignItems: "center",
+                }}
                 onPress={() => {
                   setFolderPickerVisible(false);
                   setPendingAction(null);
                   setPickerStack([]);
-                  setActiveDestinationFolderId(null);
                 }}
               >
-                <Text className="font-bold text-black">Cancel</Text>
+                <Text style={{ color: "white", fontFamily: "Manrope_Bold" }}>
+                  Cancel
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                className="flex-1 bg-black py-4 rounded-xl items-center"
+                style={{
+                  flex: 1,
+                  backgroundColor: THEME.accent,
+                  padding: 16,
+                  borderRadius: 16,
+                  alignItems: "center",
+                }}
                 onPress={() => {
                   setCreateParentId(currentPickerFolderId);
                   setFolderPickerVisible(false);
                   setFolderCreateVisible(true);
                 }}
               >
-                <Text className="font-bold text-white">Create Folder</Text>
+                <Text style={{ color: "black", fontFamily: "Manrope_Bold" }}>
+                  New Folder
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      <Modal visible={folderCreateVisible} transparent animationType="slide">
-        <View className="flex-1 justify-center items-center bg-black/60">
-          <View className="bg-white p-6 rounded-[32px] w-[85%] items-center shadow-2xl">
-            <Feather
-              name="folder-plus"
-              size={40}
-              color="black"
-              className="mb-4"
-            />
-            <Text className="text-xl font-black text-black mb-2 text-center">
-              Create Folder
-            </Text>
-            <Text className="text-neutral-500 text-center mb-4">
-              Parent:{" "}
-              {createParentId
-                ? folders.find((f) => f.id === createParentId)?.name || "Folder"
-                : "File Hub"}
+      {/* Create Folder Modal */}
+      <Modal visible={folderCreateVisible} transparent animationType="fade">
+        <View className="flex-1 justify-center items-center bg-black/80 flex-row">
+          <View
+            style={{
+              backgroundColor: THEME.surface,
+              padding: 24,
+              borderRadius: 32,
+              width: "90%",
+              borderWidth: 1,
+              borderColor: THEME.borderGlass,
+            }}
+          >
+            <Text
+              style={{
+                color: "white",
+                fontSize: 20,
+                fontFamily: "SpaceGrotesk_Bold",
+                marginBottom: 20,
+                textAlign: "center",
+              }}
+            >
+              New Folder
             </Text>
             <TextInput
-              className="w-full bg-neutral-100 rounded-2xl p-4 text-left text-lg font-bold mb-6"
+              style={{
+                backgroundColor: THEME.surfaceBright,
+                color: "white",
+                padding: 16,
+                borderRadius: 16,
+                fontFamily: "Manrope_Bold",
+                fontSize: 16,
+                marginBottom: 20,
+              }}
               value={newFolderName}
               onChangeText={setNewFolderName}
-              placeholder="Folder name"
-              placeholderTextColor="#737373"
+              placeholder="e.g. Tax Documents"
+              placeholderTextColor={THEME.textMuted}
             />
-            <View className="flex-row w-full gap-2">
+            <View style={{ flexDirection: "row", gap: 12 }}>
               <TouchableOpacity
-                className="flex-1 bg-neutral-200 py-4 rounded-xl items-center"
+                style={{ flex: 1, padding: 16, alignItems: "center" }}
                 onPress={() => {
                   setFolderCreateVisible(false);
                   setNewFolderName("");
                 }}
               >
-                <Text className="font-bold text-black">Cancel</Text>
+                <Text style={{ color: THEME.textMuted, fontFamily: "Manrope_Bold" }}>
+                  Cancel
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                className="flex-1 bg-black py-4 rounded-xl items-center"
+                style={{
+                  flex: 1,
+                  backgroundColor: THEME.accent,
+                  padding: 16,
+                  borderRadius: 16,
+                  alignItems: "center",
+                }}
                 onPress={handleCreateFolder}
                 disabled={creatingFolder}
               >
                 {creatingFolder ? (
-                  <ActivityIndicator color="white" />
+                  <ActivityIndicator color="black" />
                 ) : (
-                  <Text className="font-bold text-white">Create</Text>
+                  <Text style={{ color: "black", fontFamily: "Manrope_Bold" }}>
+                    Create
+                  </Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -880,17 +1232,29 @@ export default function DashboardScreen() {
         </View>
       </Modal>
 
+      {/* Note Modal */}
       <Modal visible={noteModalVisible} transparent animationType="slide">
-        <View className="flex-1 justify-end bg-black/40">
+        <View className="flex-1 justify-end bg-black/80">
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : undefined}
-            keyboardVerticalOffset={24}
-            className="w-full"
+            keyboardVerticalOffset={0}
           >
-            <View className="bg-white pt-6 px-6 pb-10 rounded-t-[32px] h-[80%]">
+            <View
+              style={{
+                backgroundColor: THEME.surface,
+                padding: 24,
+                borderTopLeftRadius: 32,
+                borderTopRightRadius: 32,
+                height: 500,
+                borderTopWidth: 1,
+                borderColor: THEME.borderGlass,
+              }}
+            >
               <View className="flex-row justify-between items-center mb-6">
-                <Text className="text-2xl font-black text-black">
-                  Secure Note
+                <Text
+                  style={{ color: "white", fontSize: 20, fontFamily: "SpaceGrotesk_Bold" }}
+                >
+                  Create Note
                 </Text>
                 <TouchableOpacity
                   onPress={() => {
@@ -898,99 +1262,67 @@ export default function DashboardScreen() {
                     setNoteModalVisible(false);
                   }}
                 >
-                  <Feather name="x" size={24} color="black" />
+                  <Feather name="x" size={24} color={THEME.textMuted} />
                 </TouchableOpacity>
               </View>
               <TextInput
-                className="text-xl font-bold bg-neutral-100 p-4 rounded-xl mb-4"
-                placeholderTextColor="gray"
+                style={{
+                  backgroundColor: THEME.surfaceBright,
+                  color: "white",
+                  padding: 16,
+                  borderRadius: 16,
+                  fontFamily: "Manrope_Bold",
+                  fontSize: 16,
+                  marginBottom: 16,
+                }}
+                placeholderTextColor={THEME.textMuted}
                 placeholder="Note Title"
                 value={noteTitle}
                 onChangeText={setNoteTitle}
               />
               <TextInput
-                className="flex-1 text-black bg-neutral-100 p-4 rounded-xl mb-6 text-lg"
-                placeholderTextColor="gray"
-                placeholder="Write your notes here..."
+                style={{
+                  flex: 1,
+                  backgroundColor: THEME.surfaceBright,
+                  color: "white",
+                  padding: 16,
+                  borderRadius: 16,
+                  fontSize: 16,
+                  marginBottom: 20,
+                  textAlignVertical: "top",
+                }}
+                placeholderTextColor={THEME.textMuted}
+                placeholder="Write sensitive details here..."
                 multiline
                 returnKeyType="done"
                 blurOnSubmit
-                onSubmitEditing={Keyboard.dismiss}
-                textAlignVertical="top"
                 value={noteContent}
                 onChangeText={setNoteContent}
               />
-              <View className="flex-row gap-2">
-                <TouchableOpacity
-                  className="flex-1 bg-neutral-200 py-4 rounded-full items-center"
-                  onPress={() => {
-                    Keyboard.dismiss();
-                    setNoteModalVisible(false);
-                  }}
-                >
-                  <Text className="text-black font-bold text-lg">Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  className="flex-1 bg-black py-4 rounded-full items-center"
-                  onPress={handleCreateNote}
-                >
-                  <Text className="text-white font-bold text-lg">
-                    Save Note
+              <TouchableOpacity
+                style={{
+                  backgroundColor: THEME.accent,
+                  padding: 16,
+                  borderRadius: 16,
+                  alignItems: "center",
+                }}
+                onPress={handleCreateNote}
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <ActivityIndicator color="black" />
+                ) : (
+                  <Text
+                    style={{ color: "black", fontFamily: "SpaceGrotesk_Bold", fontSize: 16 }}
+                  >
+                    Encrypt & Save
                   </Text>
-                </TouchableOpacity>
-              </View>
+                )}
+              </TouchableOpacity>
             </View>
           </KeyboardAvoidingView>
         </View>
       </Modal>
-
-      <Modal visible={scanModalVisible} transparent animationType="fade">
-        <View className="flex-1 justify-center items-center bg-black/60">
-          <View className="bg-white p-6 rounded-[32px] w-[85%] items-center shadow-2xl">
-            <Feather
-              name="file-text"
-              size={40}
-              color="#4F46E5"
-              className="mb-4"
-            />
-            <Text className="text-xl font-black text-black mb-2 text-center">
-              Save Scanned Document
-            </Text>
-            <Text className="text-neutral-500 text-center mb-6">
-              Enter a name for your PDF document.
-            </Text>
-            <TextInput
-              className="w-full bg-neutral-100 rounded-2xl p-4 text-left text-lg font-bold mb-6"
-              value={scannedFileName}
-              onChangeText={setScannedFileName}
-              placeholder="e.g. Scan"
-            />
-            <View className="flex-row w-full gap-2">
-              <TouchableOpacity
-                className="flex-1 bg-neutral-200 py-4 rounded-xl items-center"
-                onPress={() => {
-                  setScanModalVisible(false);
-                  setScannedImageUri(null);
-                  setScannedFileName("");
-                }}
-              >
-                <Text className="font-bold text-black">Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="flex-1 bg-[#4F46E5] py-4 rounded-xl items-center"
-                onPress={handleSaveScannedDoc}
-                disabled={uploading}
-              >
-                {uploading ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <Text className="font-bold text-white">Save PDF</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </SafeAreaView>
+    </View>
   );
 }

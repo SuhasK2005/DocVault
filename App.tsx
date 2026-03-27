@@ -14,6 +14,13 @@ import DocumentViewerScreen from "./src/screens/DocumentViewerScreen";
 import ScannerScreen from "./src/screens/ScannerScreen";
 
 import * as Linking from "expo-linking";
+import { useFonts } from 'expo-font';
+
+// Direct require of font assets to bypass Metro resolution issues with the package index
+const SpaceGrotesk_400Regular = require('@expo-google-fonts/space-grotesk/400Regular/SpaceGrotesk_400Regular.ttf');
+const SpaceGrotesk_700Bold = require('@expo-google-fonts/space-grotesk/700Bold/SpaceGrotesk_700Bold.ttf');
+const Manrope_400Regular = require('@expo-google-fonts/manrope/400Regular/Manrope_400Regular.ttf');
+const Manrope_700Bold = require('@expo-google-fonts/manrope/700Bold/Manrope_700Bold.ttf');
 
 const Stack = createNativeStackNavigator();
 
@@ -47,6 +54,13 @@ export default function App() {
   const isAuthReady = useAuthStore((state) => state.isAuthReady);
   const setAuthReady = useAuthStore((state) => state.setAuthReady);
   const backgroundAtRef = React.useRef<number | null>(null);
+
+  const [fontsLoaded] = useFonts({
+    SpaceGrotesk: SpaceGrotesk_400Regular,
+    SpaceGrotesk_Bold: SpaceGrotesk_700Bold,
+    Manrope: Manrope_400Regular,
+    Manrope_Bold: Manrope_700Bold,
+  });
 
   React.useEffect(() => {
     let mounted = true;
@@ -96,7 +110,7 @@ export default function App() {
     };
   }, [setAuthReady, setSession, setUnlocked]);
 
-  if (!isAuthReady) {
+  if (!isAuthReady || !fontsLoaded) {
     return (
       <View className="flex-1 items-center justify-center bg-black">
         <StatusBar style="light" />

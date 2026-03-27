@@ -8,7 +8,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthStore } from "../stores/useAuthStore";
@@ -25,7 +25,9 @@ export default function UnlockScreen() {
   const logout = useAuthStore((state) => state.logout);
   const user = useAuthStore((state) => state.user);
 
-  const [step, setStep] = useState<"biometrics" | "loading" | "setup">("biometrics");
+  const [step, setStep] = useState<"biometrics" | "loading" | "setup">(
+    "biometrics"
+  );
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -94,7 +96,9 @@ export default function UnlockScreen() {
 
     setIsProcessing(true);
     try {
-      const { derivedKeyHex, saltHex, authHash } = deriveMasterKey(password.trim());
+      const { derivedKeyHex, saltHex, authHash } = deriveMasterKey(
+        password.trim()
+      );
 
       const { error } = await supabase.from("profiles").upsert({
         id: user?.id,
@@ -120,28 +124,91 @@ export default function UnlockScreen() {
     logout();
   };
 
+  const THEME = {
+    bg: "#0e0e0e",
+    surface: "#1a1919",
+    surfaceBright: "#2c2c2c",
+    accent: "#ff9157",
+    textMuted: "#adaaaa",
+    borderGlass: "rgba(173, 170, 170, 0.1)",
+  };
+
   return (
-    <SafeAreaView className="flex-1 bg-[#0A0A0A]">
-      <StatusBar style="light" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: THEME.bg }}>
+      <StatusBar style="light" hidden={true} />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1"
+        style={{ flex: 1 }}
       >
         <ScrollView
           contentContainerStyle={{ flexGrow: 1 }}
           keyboardShouldPersistTaps="handled"
         >
-          <View className="flex-1 px-8 pt-32 pb-12 flex-col justify-between">
+          <View
+            style={{
+              flex: 1,
+              paddingHorizontal: 32,
+              paddingTop: 100,
+              paddingBottom: 48,
+              justifyContent: "space-between",
+            }}
+          >
             <View>
-              <View className="w-20 h-20 bg-neutral-900 rounded-full items-center justify-center mb-10 border border-neutral-800">
-                <Feather name={step === "setup" ? "shield" : "lock"} size={32} color="#D4D4D8" />
+              {/* Icon Header */}
+              <View
+                style={{
+                  width: 64,
+                  height: 64,
+                  backgroundColor: "rgba(255, 145, 87, 0.1)",
+                  borderRadius: 20,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderWidth: 1,
+                  borderColor: "rgba(255, 145, 87, 0.2)",
+                  marginBottom: 80,
+                }}
+              >
+                <Feather
+                  name={step === "setup" ? "shield" : "lock"}
+                  size={28}
+                  color={THEME.accent}
+                />
               </View>
 
               <View>
-                <Text className="text-[48px] font-black tracking-tighter mb-4 text-white leading-[48px]">
-                  {step === "setup" ? "Secure\nVault." : "Vault\nLocked."}
+                <Text
+                  style={{
+                    color: THEME.textMuted,
+                    fontFamily: "SpaceGrotesk_Bold",
+                    fontSize: 10,
+                    letterSpacing: 4,
+                    marginBottom: 12,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  SECURED ENTRY
                 </Text>
-                <Text className="text-neutral-400 font-medium text-lg leading-relaxed mb-10">
+                <Text
+                  style={{
+                    fontSize: 44,
+                    fontFamily: "SpaceGrotesk_Bold",
+                    color: "white",
+                    letterSpacing: -1.5,
+                    marginBottom: 16,
+                    lineHeight: 48,
+                  }}
+                >
+                  {step === "setup" ? "Secure Your\nVault" : "Vault\nLocked"}
+                </Text>
+                <Text
+                  style={{
+                    color: THEME.textMuted,
+                    fontSize: 15,
+                    fontFamily: "Manrope_Bold",
+                    lineHeight: 24,
+                    marginBottom: 80,
+                  }}
+                >
                   {step === "setup"
                     ? "Welcome! Please set a 6-digit Master PIN. You will need this later to encrypt or open your files."
                     : step === "loading"
@@ -151,8 +218,14 @@ export default function UnlockScreen() {
               </View>
 
               {step === "loading" && (
-                <View className="items-center justify-center py-10">
-                  <ActivityIndicator size="large" color="#ffffff" />
+                <View
+                  style={{
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingVertical: 40,
+                  }}
+                >
+                  <ActivityIndicator size="large" color={THEME.accent} />
                 </View>
               )}
 
@@ -160,52 +233,104 @@ export default function UnlockScreen() {
                 <TouchableOpacity
                   activeOpacity={0.8}
                   onPress={handleDeviceAuth}
-                  className="w-full overflow-hidden rounded-[28px] mt-2"
+                  style={{
+                    backgroundColor: THEME.accent,
+                    borderRadius: 20,
+                    paddingVertical: 18,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    shadowColor: THEME.accent,
+                    shadowOffset: { width: 0, height: 8 },
+                    shadowOpacity: 0.4,
+                    shadowRadius: 16,
+                    elevation: 8,
+                  }}
                 >
-                  <LinearGradient
-                    colors={["#ffffff", "#e4e4e7"]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    className="py-5 px-8 flex-row items-center justify-center h-20"
+                  <Text
+                    style={{
+                      color: "black",
+                      fontSize: 18,
+                      fontFamily: "SpaceGrotesk_Bold",
+                      marginRight: 12,
+                    }}
                   >
-                    <Text className="text-black text-xl font-bold tracking-tight mr-3">
-                      Unlock App
-                    </Text>
-                    <Feather name="smile" size={20} color="black" />
-                  </LinearGradient>
+                    Unlock App
+                  </Text>
+                  <Feather name="smile" size={20} color="black" />
                 </TouchableOpacity>
               )}
 
               {step === "setup" && (
-                <View className="space-y-4">
-                  <View className="bg-neutral-900 rounded-[28px] border border-neutral-800 flex-row items-center px-6 py-2 h-20">
-                    <Feather name="key" size={20} color="#71717A" />
+                <View style={{ gap: 16 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      backgroundColor: THEME.surface,
+                      borderRadius: 20,
+                      borderWidth: 1,
+                      borderColor: THEME.borderGlass,
+                      paddingHorizontal: 20,
+                      height: 64,
+                    }}
+                  >
+                    <Feather name="key" size={20} color={THEME.textMuted} />
                     <TextInput
-                      className="flex-1 text-white text-xl font-bold ml-4 tracking-wider h-full"
+                      style={{
+                        flex: 1,
+                        color: "white",
+                        fontSize: 20,
+                        fontFamily: "SpaceGrotesk_Bold",
+                        marginLeft: 16,
+                        letterSpacing: 4,
+                      }}
                       placeholder="Create 6-digit PIN"
-                      placeholderTextColor="#52525B"
+                      placeholderTextColor="rgba(255,255,255,0.2)"
                       secureTextEntry
                       keyboardType="number-pad"
                       maxLength={6}
                       value={password}
-                      onChangeText={(val) => setPassword(val.replace(/[^0-9]/g, ""))}
+                      onChangeText={(val) =>
+                        setPassword(val.replace(/[^0-9]/g, ""))
+                      }
                       autoCapitalize="none"
                       autoCorrect={false}
                       editable={!isProcessing}
                     />
                   </View>
 
-                  <View className="bg-neutral-900 rounded-[28px] border border-neutral-800 flex-row items-center px-6 py-2 h-20">
-                    <Feather name="key" size={20} color="#71717A" />
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      backgroundColor: THEME.surface,
+                      borderRadius: 20,
+                      borderWidth: 1,
+                      borderColor: THEME.borderGlass,
+                      paddingHorizontal: 20,
+                      height: 64,
+                    }}
+                  >
+                    <Feather name="key" size={20} color={THEME.textMuted} />
                     <TextInput
-                      className="flex-1 text-white text-xl font-bold ml-4 tracking-wider h-full"
+                      style={{
+                        flex: 1,
+                        color: "white",
+                        fontSize: 20,
+                        fontFamily: "SpaceGrotesk_Bold",
+                        marginLeft: 16,
+                        letterSpacing: 4,
+                      }}
                       placeholder="Confirm 6-digit PIN"
-                      placeholderTextColor="#52525B"
+                      placeholderTextColor="rgba(255,255,255,0.2)"
                       secureTextEntry
                       keyboardType="number-pad"
                       maxLength={6}
                       value={confirmPassword}
-                      onChangeText={(val) => setConfirmPassword(val.replace(/[^0-9]/g, ""))}
+                      onChangeText={(val) =>
+                        setConfirmPassword(val.replace(/[^0-9]/g, ""))
+                      }
                       autoCapitalize="none"
                       autoCorrect={false}
                       editable={!isProcessing}
@@ -215,30 +340,53 @@ export default function UnlockScreen() {
                   <TouchableOpacity
                     activeOpacity={0.8}
                     onPress={handleSetupMasterPin}
-                    className="w-full overflow-hidden rounded-[28px] mt-2"
+                    style={{
+                      backgroundColor: THEME.accent,
+                      borderRadius: 20,
+                      paddingVertical: 18,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginTop: 16,
+                      shadowColor: THEME.accent,
+                      shadowOffset: { width: 0, height: 8 },
+                      shadowOpacity: 0.4,
+                      shadowRadius: 16,
+                      elevation: 8,
+                    }}
                   >
-                    <LinearGradient
-                      colors={["#ffffff", "#e4e4e7"]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      className="py-5 px-8 flex-row items-center justify-center h-20"
+                    <Text
+                      style={{
+                        color: "black",
+                        fontSize: 18,
+                        fontFamily: "SpaceGrotesk_Bold",
+                        marginRight: 12,
+                      }}
                     >
-                      <Text className="text-black text-xl font-bold tracking-tight mr-3">
-                        {isProcessing ? "Encrypting..." : "Complete Setup"}
-                      </Text>
+                      {isProcessing ? "Encrypting..." : "Complete Setup"}
+                    </Text>
+                    {!isProcessing && (
                       <Feather name="check" size={20} color="black" />
-                    </LinearGradient>
+                    )}
                   </TouchableOpacity>
                 </View>
               )}
             </View>
 
-            <View>
+            <View style={{ alignItems: "center" }}>
               <TouchableOpacity
-                className="items-center py-4"
+                style={{ paddingVertical: 16, paddingHorizontal: 24 }}
                 onPress={handleSignOut}
               >
-                <Text className="text-red-500 font-bold uppercase tracking-widest text-xs">
+                <Text
+                  style={{
+                    color: "#FF453A",
+                    fontFamily: "Manrope_Bold",
+                    fontSize: 12,
+                    letterSpacing: 2,
+                    textTransform: "uppercase",
+                  }}
+                >
                   Terminate Session
                 </Text>
               </TouchableOpacity>

@@ -1,15 +1,21 @@
 import React from "react";
-import {
-  ActivityIndicator,
-  Image,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { ActivityIndicator, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { ScannerPage } from "./types";
+
+type FolderOption = {
+  id: string;
+  name: string;
+};
+
+const THEME = {
+  bg: "#0e0e0e",
+  surface: "#1a1919",
+  surfaceBright: "#2c2c2c",
+  accent: "#ff9157",
+  textMuted: "#adaaaa",
+  borderGlass: "rgba(173, 170, 170, 0.1)",
+};
 
 type Props = {
   pages: ScannerPage[];
@@ -34,132 +40,140 @@ export default function PreviewScreen({
   onRemovePage,
   uploading,
 }: Props) {
-  const movePage = (index: number, direction: -1 | 1) => {
-    // Re-order is handled by parent via onRemovePage + reinsertion
-    // But since parent manages pages, we need a workaround.
-    // For now this is a visual-only feature; we'll signal reorder via
-    // the parent if they provide an onReorder callback.
-  };
-
   return (
-    <View className="flex-1 bg-[#F4F4F5]">
-      {/* Header info */}
-      <View className="px-5 pt-3 pb-2 flex-row items-center justify-between">
-        <Text className="text-black font-black text-2xl">Scan Preview</Text>
-        <View className="bg-black px-3 py-1 rounded-full">
-          <Text className="text-white font-bold text-xs">
-            {pages.length} {pages.length === 1 ? "page" : "pages"}
-          </Text>
+    <View style={{ flex: 1, backgroundColor: THEME.bg }}>
+      <View style={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <Text style={{ color: "white", fontSize: 28, fontFamily: "SpaceGrotesk_Bold" }}>Scan Preview</Text>
+        <View style={{ backgroundColor: THEME.surfaceBright, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: THEME.borderGlass }}>
+          <Text style={{ color: THEME.accent, fontSize: 12, fontFamily: "SpaceGrotesk_Bold" }}>{pages.length} PAGES</Text>
         </View>
       </View>
 
-      <ScrollView className="px-5" showsVerticalScrollIndicator={false}>
-        {/* Document name */}
+      <ScrollView style={{ paddingHorizontal: 24 }} showsVerticalScrollIndicator={false}>
+        <Text style={{ color: THEME.textMuted, fontSize: 12, fontFamily: "SpaceGrotesk_Bold", marginBottom: 12, letterSpacing: 1, textTransform: "uppercase" }}>
+          DOCUMENT DETAILS
+        </Text>
         <TextInput
-          className="bg-white rounded-xl px-4 py-3 font-bold text-black border border-neutral-200 mb-3"
+          style={{
+            backgroundColor: THEME.surface,
+            borderRadius: 18,
+            paddingHorizontal: 20,
+            paddingVertical: 16,
+            color: "white",
+            fontFamily: "Manrope_Bold",
+            fontSize: 16,
+            borderWidth: 1,
+            borderColor: THEME.borderGlass,
+            marginBottom: 16,
+          }}
           value={fileName}
           onChangeText={onChangeFileName}
           placeholder="Document name"
-          placeholderTextColor="#737373"
+          placeholderTextColor="rgba(255,255,255,0.3)"
         />
 
-        {/* Folder picker */}
         <TouchableOpacity
-          className="bg-white rounded-xl p-4 border border-neutral-200 mb-3 flex-row items-center justify-between"
+          style={{
+            backgroundColor: THEME.surface,
+            borderRadius: 18,
+            padding: 20,
+            borderWidth: 1,
+            borderColor: THEME.borderGlass,
+            marginBottom: 24,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
           onPress={onPickFolder}
         >
           <View>
-            <Text className="text-neutral-500 font-bold text-xs mb-1">
-              Save To Folder
+            <Text style={{ color: THEME.textMuted, fontSize: 11, fontFamily: "SpaceGrotesk_Bold", marginBottom: 4, textTransform: "uppercase" }}>
+              VAULT LOCATION
             </Text>
-            <Text className="text-black font-bold">{selectedFolderName}</Text>
+            <Text style={{ color: "white", fontSize: 16, fontFamily: "Manrope_Bold" }}>{selectedFolderName}</Text>
           </View>
-          <Feather name="chevron-right" size={18} color="black" />
+          <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: THEME.surfaceBright, alignItems: "center", justifyContent: "center" }}>
+            <Feather name="chevron-right" size={20} color="white" />
+          </View>
         </TouchableOpacity>
 
-        {/* Pages with thumbnails */}
+        <Text style={{ color: THEME.textMuted, fontSize: 12, fontFamily: "SpaceGrotesk_Bold", marginBottom: 16, letterSpacing: 1, textTransform: "uppercase" }}>
+          CAPTURED PAGES
+        </Text>
+
         {pages.map((page, index) => (
           <View
             key={page.id}
-            className="bg-white rounded-xl p-3 border border-neutral-200 mb-3 flex-row items-center"
+            style={{
+              backgroundColor: THEME.surface,
+              borderRadius: 20,
+              padding: 16,
+              borderWidth: 1,
+              borderColor: THEME.borderGlass,
+              marginBottom: 12,
+              flexDirection: "row",
+              alignItems: "center",
+            }}
           >
-            {/* Thumbnail */}
-            <View
-              style={{
-                width: 56,
-                height: 72,
-                borderRadius: 8,
-                overflow: "hidden",
-                backgroundColor: "#f5f5f5",
-                marginRight: 12,
-              }}
-            >
-              <Image
-                source={{ uri: page.imageUri }}
-                style={{ width: "100%", height: "100%" }}
-                resizeMode="cover"
-              />
+            <View style={{ width: 56, height: 56, borderRadius: 14, backgroundColor: THEME.surfaceBright, alignItems: "center", justifyContent: "center", marginRight: 16 }}>
+              <Feather name="file-text" size={24} color={THEME.accent} />
             </View>
-
-            {/* Page info */}
-            <View className="flex-1">
-              <Text className="text-black font-bold">Page {index + 1}</Text>
-              <Text className="text-neutral-500 text-xs mt-0.5">
-                Filter: {page.filter}
-              </Text>
-              {/* Reorder buttons */}
-              <View className="flex-row mt-1.5" style={{ gap: 8 }}>
-                {index > 0 && (
-                  <TouchableOpacity
-                    className="bg-neutral-100 px-2 py-1 rounded-md"
-                    onPress={() => movePage(index, -1)}
-                  >
-                    <Feather name="arrow-up" size={14} color="#525252" />
-                  </TouchableOpacity>
-                )}
-                {index < pages.length - 1 && (
-                  <TouchableOpacity
-                    className="bg-neutral-100 px-2 py-1 rounded-md"
-                    onPress={() => movePage(index, 1)}
-                  >
-                    <Feather name="arrow-down" size={14} color="#525252" />
-                  </TouchableOpacity>
-                )}
-              </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: "white", fontSize: 16, fontFamily: "Manrope_Bold" }}>Page {index + 1}</Text>
+              <Text style={{ color: THEME.textMuted, fontSize: 12, fontFamily: "Manrope_Regular", marginTop: 2 }}>Ready for vault</Text>
             </View>
-
-            {/* Remove */}
             {pages.length > 1 ? (
-              <TouchableOpacity onPress={() => onRemovePage(page.id)}>
-                <View className="bg-red-50 px-3 py-2 rounded-lg">
-                  <Feather name="trash-2" size={16} color="#DC2626" />
-                </View>
+              <TouchableOpacity
+                style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(239, 68, 68, 0.1)", alignItems: "center", justifyContent: "center" }}
+                onPress={() => onRemovePage(page.id)}
+              >
+                <Feather name="trash-2" size={18} color="#ef4444" />
               </TouchableOpacity>
             ) : null}
           </View>
         ))}
+        <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* Bottom actions */}
-      <View className="px-5 pb-8 pt-3">
+      <View style={{ paddingHorizontal: 24, paddingBottom: 40, paddingTop: 16 }}>
         <TouchableOpacity
-          className="bg-neutral-200 rounded-xl py-4 items-center mb-3 flex-row justify-center"
+          style={{
+            backgroundColor: "transparent",
+            borderRadius: 18,
+            height: 56,
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: THEME.borderGlass,
+            marginBottom: 12,
+            flexDirection: "row",
+          }}
           onPress={onAddPage}
           disabled={uploading}
-          style={{ gap: 8 }}
         >
-          <Feather name="plus" size={18} color="black" />
-          <Text className="font-bold text-black">Add Page</Text>
+          <Feather name="plus" size={18} color="white" style={{ marginRight: 8 }} />
+          <Text style={{ color: "white", fontFamily: "SpaceGrotesk_Bold", fontSize: 16 }}>
+            ADD ANOTHER PAGE
+          </Text>
         </TouchableOpacity>
+
         <TouchableOpacity
-          className="bg-black rounded-xl py-4 items-center"
+          style={{
+            backgroundColor: THEME.accent,
+            borderRadius: 18,
+            height: 64,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
           onPress={onSave}
           disabled={uploading || pages.length === 0}
         >
           {uploading ? (
-            <ActivityIndicator color="white" />
+            <ActivityIndicator color="#3d1a08" />
           ) : (
-            <Text className="font-bold text-white">Save & Upload PDF</Text>
+            <Text style={{ color: "#3d1a08", fontFamily: "SpaceGrotesk_Bold", fontSize: 18 }}>
+              SECURE & UPLOAD PDF
+            </Text>
           )}
         </TouchableOpacity>
       </View>
