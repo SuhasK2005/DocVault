@@ -165,7 +165,7 @@ export default function UnlockScreen() {
                   justifyContent: "center",
                   borderWidth: 1,
                   borderColor: "rgba(255, 145, 87, 0.2)",
-                  marginBottom: 80,
+                  marginBottom: 60,
                 }}
               >
                 <Feather
@@ -180,8 +180,8 @@ export default function UnlockScreen() {
                   style={{
                     color: THEME.textMuted,
                     fontFamily: "SpaceGrotesk_Bold",
-                    fontSize: 10,
-                    letterSpacing: 4,
+                    fontSize: 13,
+                    letterSpacing: 2,
                     marginBottom: 12,
                     textTransform: "uppercase",
                   }}
@@ -206,7 +206,7 @@ export default function UnlockScreen() {
                     fontSize: 15,
                     fontFamily: "Manrope_Bold",
                     lineHeight: 24,
-                    marginBottom: 80,
+                    marginBottom: 60,
                   }}
                 >
                   {step === "setup"

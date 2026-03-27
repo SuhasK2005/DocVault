@@ -1,7 +1,8 @@
 import React from "react";
-import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Animated, Dimensions, Text, TouchableOpacity, View } from "react-native";
 import { CameraType, CameraView, FlashMode, useCameraPermissions } from "expo-camera";
 import { Feather } from "@expo/vector-icons";
+import Svg, { Defs, Mask, Rect } from "react-native-svg";
 
 type Props = {
   onCaptured: (uri: string) => void;
@@ -23,6 +24,27 @@ export default function CameraScreen({ onCaptured, onCancel }: Props) {
   const [flash, setFlash] = React.useState<FlashMode>("off");
   const [cameraRef, setCameraRef] = React.useState<CameraView | null>(null);
   const [capturing, setCapturing] = React.useState(false);
+
+  const scanLineAnim = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    if (permission?.granted) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(scanLineAnim, {
+            toValue: 1,
+            duration: 2500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(scanLineAnim, {
+            toValue: 0,
+            duration: 2500,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    }
+  }, [permission?.granted]);
 
   const handleCapture = async () => {
     if (!cameraRef || capturing) return;
@@ -88,12 +110,71 @@ export default function CameraScreen({ onCaptured, onCancel }: Props) {
         ref={(ref) => setCameraRef(ref)}
       />
 
-      {/* Guide Overlay */}
-      <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }} pointerEvents="none">
-        <View style={{ width: "80%", height: "70%", borderWidth: 2, borderColor: "rgba(255,255,255,0.3)", borderRadius: 24, borderStyle: "dashed" }} />
-        <Text style={{ color: "rgba(255,255,255,0.5)", fontFamily: "SpaceGrotesk_Bold", fontSize: 12, marginTop: 16, letterSpacing: 1 }}>
-          ALIGN DOCUMENT WITHIN FRAME
-        </Text>
+      {/* SVG Mask Overlay */}
+      <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} pointerEvents="none">
+        <Svg height="100%" width="100%">
+          <Defs>
+            <Mask id="mask">
+              <Rect height="100%" width="100%" fill="white" />
+              <Rect
+                x="10%"
+                y="15%"
+                width="80%"
+                height="70%"
+                rx={24}
+                fill="black"
+              />
+            </Mask>
+          </Defs>
+          <Rect
+            height="100%"
+            width="100%"
+            fill="rgba(0,0,0,0.7)"
+            mask="url(#mask)"
+          />
+        </Svg>
+        
+        {/* Glowy Orange Border */}
+        <View 
+          style={{
+            position: "absolute",
+            top: "15%",
+            left: "10%",
+            width: "80%",
+            height: "70%",
+            borderWidth: 2,
+            borderColor: THEME.accent,
+            borderRadius: 24,
+            shadowColor: THEME.accent,
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0.8,
+            shadowRadius: 10,
+            overflow: "hidden"
+          }} 
+        >
+          {/* Moving Scan Line */}
+          <Animated.View
+            style={{
+              width: "100%",
+              height: 4,
+              backgroundColor: THEME.accent,
+              position: "absolute",
+              top: 0,
+              shadowColor: THEME.accent,
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: 1,
+              shadowRadius: 8,
+              transform: [
+                {
+                  translateY: scanLineAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, 500], // Matches approx 70% of screen height
+                  }),
+                },
+              ],
+            }}
+          />
+        </View>
       </View>
 
       {/* Top Controls */}

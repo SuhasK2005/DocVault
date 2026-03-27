@@ -18,6 +18,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Feather } from "@expo/vector-icons";
@@ -86,11 +87,13 @@ export default function AllDocumentsScreen() {
   const [noteTitle, setNoteTitle] = useState("");
   const [noteContent, setNoteContent] = useState("");
 
-  const [sortOrder, setSortOrder] = useState<"date_desc" | "date_asc" | "name_asc">("date_desc");
+  const [sortOrder, setSortOrder] = useState<
+    "date_desc" | "date_asc" | "name_asc"
+  >("date_desc");
 
   const [documentActionVisible, setDocumentActionVisible] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<DocumentNode | null>(
-    null
+    null,
   );
   const [openingDocument, setOpeningDocument] = useState(false);
   const [deletingDocument, setDeletingDocument] = useState(false);
@@ -98,6 +101,7 @@ export default function AllDocumentsScreen() {
   const [documentRenameVisible, setDocumentRenameVisible] = useState(false);
   const [documentRenameValue, setDocumentRenameValue] = useState("");
   const [renamingDocument, setRenamingDocument] = useState(false);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   const [moveModalVisible, setMoveModalVisible] = useState(false);
   const [moveStack, setMoveStack] = useState<
@@ -107,7 +111,7 @@ export default function AllDocumentsScreen() {
 
   const currentFolderId = useMemo(
     () => (folderStack.length ? folderStack[folderStack.length - 1].id : null),
-    [folderStack]
+    [folderStack],
   );
 
   const currentFolderName = useMemo(
@@ -115,26 +119,26 @@ export default function AllDocumentsScreen() {
       folderStack.length
         ? folderStack[folderStack.length - 1].name
         : "File Hub",
-    [folderStack]
+    [folderStack],
   );
 
   const moveTargetFolderId = useMemo(
     () => (moveStack.length ? moveStack[moveStack.length - 1].id : null),
-    [moveStack]
+    [moveStack],
   );
 
   const moveTargetFolderName = useMemo(
     () =>
       moveStack.length ? moveStack[moveStack.length - 1].name : "File Hub",
-    [moveStack]
+    [moveStack],
   );
 
   const visibleMoveFolders = useMemo(
     () =>
       allFolders.filter(
-        (folder) => (folder.parent_id || null) === moveTargetFolderId
+        (folder) => (folder.parent_id || null) === moveTargetFolderId,
       ),
-    [allFolders, moveTargetFolderId]
+    [allFolders, moveTargetFolderId],
   );
 
   const formatBytes = (bytes: number | null) => {
@@ -230,7 +234,7 @@ export default function AllDocumentsScreen() {
         })) as FolderNode[];
 
         setFolders(
-          normalized.filter((folder) => (currentFolderId ? false : true))
+          normalized.filter((folder) => (currentFolderId ? false : true)),
         );
         setAllFolders(normalized);
         return;
@@ -240,7 +244,7 @@ export default function AllDocumentsScreen() {
       const list = (data || []) as FolderNode[];
       setAllFolders(list);
       setFolders(
-        list.filter((folder) => (folder.parent_id || null) === currentFolderId)
+        list.filter((folder) => (folder.parent_id || null) === currentFolderId),
       );
     } catch (err: any) {
       Alert.alert("Error", err?.message || "Could not load folders");
@@ -266,7 +270,7 @@ export default function AllDocumentsScreen() {
       }
 
       fetchAllDocuments();
-    }, [user?.id, currentFolderId, routeFolderHydrated])
+    }, [user?.id, currentFolderId, routeFolderHydrated]),
   );
 
   useEffect(() => {
@@ -317,12 +321,20 @@ export default function AllDocumentsScreen() {
 
   const filteredFoldersForView = useMemo(() => {
     let list = [...folders];
-    
+
     // Sorting logic
     if (sortOrder === "date_desc") {
-      list.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+      list.sort(
+        (a, b) =>
+          new Date(b.created_at || 0).getTime() -
+          new Date(a.created_at || 0).getTime(),
+      );
     } else if (sortOrder === "date_asc") {
-      list.sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
+      list.sort(
+        (a, b) =>
+          new Date(a.created_at || 0).getTime() -
+          new Date(b.created_at || 0).getTime(),
+      );
     } else if (sortOrder === "name_asc") {
       list.sort((a, b) => a.name.localeCompare(b.name));
     }
@@ -347,7 +359,7 @@ export default function AllDocumentsScreen() {
     if (!currentFolderId) {
       Alert.alert(
         "Folder Required",
-        "Open a folder and upload inside that folder."
+        "Open a folder and upload inside that folder.",
       );
       return;
     }
@@ -456,7 +468,7 @@ export default function AllDocumentsScreen() {
     if (!currentFolderId) {
       Alert.alert(
         "Folder Required",
-        "Open a folder and scan inside that folder."
+        "Open a folder and scan inside that folder.",
       );
       return;
     }
@@ -475,7 +487,7 @@ export default function AllDocumentsScreen() {
     if (!currentFolderId) {
       Alert.alert(
         "Folder Required",
-        "Open a folder and save notes inside that folder."
+        "Open a folder and save notes inside that folder.",
       );
       return;
     }
@@ -656,7 +668,7 @@ export default function AllDocumentsScreen() {
     if (!supportsNestedFolders && currentFolderId) {
       Alert.alert(
         "Schema Update Needed",
-        "Nested folders need folders.parent_id in your database. Run migration 03_nested_folders.sql and try again."
+        "Nested folders need folders.parent_id in your database. Run migration 03_nested_folders.sql and try again.",
       );
       return;
     }
@@ -745,18 +757,18 @@ export default function AllDocumentsScreen() {
 
       setFolders((prev) =>
         prev.map((folder) =>
-          folder.id === folderId ? { ...folder, name: updatedName } : folder
-        )
+          folder.id === folderId ? { ...folder, name: updatedName } : folder,
+        ),
       );
       setAllFolders((prev) =>
         prev.map((folder) =>
-          folder.id === folderId ? { ...folder, name: updatedName } : folder
-        )
+          folder.id === folderId ? { ...folder, name: updatedName } : folder,
+        ),
       );
       setFolderStack((prev) =>
         prev.map((entry) =>
-          entry.id === folderId ? { ...entry, name: updatedName } : entry
-        )
+          entry.id === folderId ? { ...entry, name: updatedName } : entry,
+        ),
       );
 
       setFolderRenameVisible(false);
@@ -799,32 +811,28 @@ export default function AllDocumentsScreen() {
             }
           },
         },
-      ]
+      ],
     );
   };
   const handleFolderLongPress = (folder: FolderNode) => {
-    Alert.alert(
-      folder.name,
-      "Choose an action",
-      [
-        { text: "Rename", onPress: () => openFolderRename(folder) },
-        { text: "Delete", style: "destructive", onPress: () => handleDeleteFolder(folder) },
-        { text: "Cancel", style: "cancel" }
-      ]
-    );
+    Alert.alert(folder.name, "Choose an action", [
+      { text: "Rename", onPress: () => openFolderRename(folder) },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => handleDeleteFolder(folder),
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
   };
 
   const handleSortPress = () => {
-    Alert.alert(
-      "Sort Folders",
-      "Choose sorting order",
-      [
-        { text: "Date (Newest)", onPress: () => setSortOrder("date_desc") },
-        { text: "Date (Oldest)", onPress: () => setSortOrder("date_asc") },
-        { text: "Name (A-Z)", onPress: () => setSortOrder("name_asc") },
-        { text: "Cancel", style: "cancel" }
-      ]
-    );
+    Alert.alert("Sort Folders", "Choose sorting order", [
+      { text: "Date (Newest)", onPress: () => setSortOrder("date_desc") },
+      { text: "Date (Oldest)", onPress: () => setSortOrder("date_asc") },
+      { text: "Name (A-Z)", onPress: () => setSortOrder("name_asc") },
+      { text: "Cancel", style: "cancel" },
+    ]);
   };
 
   const THEME = {
@@ -852,56 +860,83 @@ export default function AllDocumentsScreen() {
         }}
       >
         <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <TouchableOpacity
+            style={{ marginRight: 16 }}
+            onPress={() => {
+              if (folderStack.length > 0) {
+                setFolderStack((prev) => prev.slice(0, -1));
+              } else {
+                navigation.goBack();
+              }
+            }}
+          >
+            <Feather name="arrow-left" size={24} color="white" />
+          </TouchableOpacity>
           <Feather name="shield" size={20} color={THEME.accent} />
           <Text
             style={{
               color: THEME.accent,
-              fontSize: 18,
+              fontSize: 20,
               fontFamily: "SpaceGrotesk_Bold",
               marginLeft: 8,
+              letterSpacing: -0.5,
             }}
           >
-            Kinetic Vault
+            DOCVAULT
           </Text>
         </View>
-        <TouchableOpacity
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 18,
-            backgroundColor: THEME.surfaceBright,
-            alignItems: "center",
-            justifyContent: "center",
-            overflow: "hidden",
-          }}
-        >
-          <Feather name="user" size={18} color="white" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+          <TouchableOpacity onPress={() => navigation.navigate("Profile")}>
+            {user?.user_metadata?.avatar_url ? (
+              <Image
+                source={{ uri: user.user_metadata.avatar_url }}
+                style={{ width: 32, height: 32, borderRadius: 16 }}
+              />
+            ) : (
+              <View
+                style={{
+                  width: 32,
+                  height: 32,
+                  backgroundColor: THEME.surfaceBright,
+                  borderRadius: 16,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Feather name="user" size={16} color="white" />
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Main Title Area */}
-      <View style={{ paddingHorizontal: 24, marginTop: 12 }}>
+      <View style={{ paddingHorizontal: 24, paddingBottom: 32, marginTop: 12 }}>
         <Text
           style={{
             color: THEME.textMuted,
-            fontSize: 11,
             fontFamily: "SpaceGrotesk_Bold",
-            letterSpacing: 1.5,
+            fontSize: 13,
+            letterSpacing: 2,
+            marginBottom: 8,
             textTransform: "uppercase",
-            marginBottom: 6,
           }}
         >
-          CENTRAL DIRECTORY
+          Central Directory
         </Text>
         <Text
           style={{
-            color: "white",
-            fontSize: 32,
+            fontSize: 40,
             fontFamily: "SpaceGrotesk_Bold",
+            color: "white",
+            letterSpacing: -1.5,
           }}
         >
           {currentFolderId ? currentFolderName : "DocVault"}
         </Text>
+
+        {/* Status Pill */}
+        
       </View>
 
       {/* Action Row */}
@@ -910,38 +945,49 @@ export default function AllDocumentsScreen() {
           flexDirection: "row",
           alignItems: "center",
           paddingHorizontal: 24,
-          marginTop: 24,
         }}
       >
         <TouchableOpacity
           style={{
             width: 52,
             height: 52,
-            backgroundColor: THEME.surface,
+            backgroundColor:
+              viewMode === "grid" ? THEME.surfaceBright : THEME.surface,
             borderRadius: 16,
             alignItems: "center",
             justifyContent: "center",
             marginRight: 12,
             borderWidth: 1,
-            borderColor: THEME.borderGlass,
+            borderColor: viewMode === "grid" ? THEME.accent : THEME.borderGlass,
           }}
+          onPress={() => setViewMode("grid")}
         >
-          <Feather name="grid" size={20} color="white" />
+          <Feather
+            name="grid"
+            size={20}
+            color={viewMode === "grid" ? "white" : THEME.textMuted}
+          />
         </TouchableOpacity>
         <TouchableOpacity
           style={{
             width: 52,
             height: 52,
-            backgroundColor: THEME.surface,
+            backgroundColor:
+              viewMode === "list" ? THEME.surfaceBright : THEME.surface,
             borderRadius: 16,
             alignItems: "center",
             justifyContent: "center",
             marginRight: 24,
             borderWidth: 1,
-            borderColor: THEME.borderGlass,
+            borderColor: viewMode === "list" ? THEME.accent : THEME.borderGlass,
           }}
+          onPress={() => setViewMode("list")}
         >
-          <Feather name="list" size={20} color={THEME.textMuted} />
+          <Feather
+            name="list"
+            size={20}
+            color={viewMode === "list" ? "white" : THEME.textMuted}
+          />
         </TouchableOpacity>
 
         {/* Vertical Separator */}
@@ -1052,7 +1098,11 @@ export default function AllDocumentsScreen() {
                 fontSize: 13,
               }}
             >
-              {sortOrder === "date_desc" ? "Newest" : sortOrder === "date_asc" ? "Oldest" : "Name"}
+              {sortOrder === "date_desc"
+                ? "Newest"
+                : sortOrder === "date_asc"
+                  ? "Oldest"
+                  : "Name"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -1091,7 +1141,13 @@ export default function AllDocumentsScreen() {
               color={THEME.textMuted}
               style={{ marginBottom: 16 }}
             />
-            <Text style={{ color: "white", fontSize: 18, fontFamily: "SpaceGrotesk_Bold" }}>
+            <Text
+              style={{
+                color: "white",
+                fontSize: 18,
+                fontFamily: "SpaceGrotesk_Bold",
+              }}
+            >
               Vault Empty
             </Text>
             <Text
@@ -1107,59 +1163,15 @@ export default function AllDocumentsScreen() {
             </Text>
           </View>
         ) : (
-          <View style={{ paddingBottom: 40 }}>
-            {currentFolderId ? (
-              <TouchableOpacity
-                onPress={() => setFolderStack((prev) => prev.slice(0, -1))}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  padding: 16,
-                  backgroundColor: THEME.surface,
-                  borderRadius: 20,
-                  marginBottom: 12,
-                  borderWidth: 1,
-                  borderColor: THEME.borderGlass,
-                }}
-              >
-                <View
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 14,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginRight: 16,
-                    backgroundColor: THEME.surfaceBright,
-                  }}
-                >
-                  <Feather name="arrow-up-left" size={20} color="white" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      color: "white",
-                      fontFamily: "SpaceGrotesk_Bold",
-                      fontSize: 16,
-                      marginBottom: 4,
-                    }}
-                  >
-                    Back
-                  </Text>
-                  <Text
-                    style={{
-                      color: THEME.textMuted,
-                      fontFamily: "Manrope_Bold",
-                      fontSize: 12,
-                    }}
-                  >
-                    {folderStack.length === 1
-                      ? "Return to Central Directory"
-                      : "Return to parent folder"}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ) : null}
+          <View
+            style={{
+              flexDirection: viewMode === "grid" ? "row" : "column",
+              flexWrap: viewMode === "grid" ? "wrap" : "nowrap",
+              justifyContent: "space-between",
+              paddingBottom: 40,
+            }}
+          >
+
 
             {filteredFoldersForView.map((folder) => (
               <TouchableOpacity
@@ -1171,16 +1183,31 @@ export default function AllDocumentsScreen() {
                 }
                 onLongPress={() => handleFolderLongPress(folder)}
                 key={folder.id}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  padding: 16,
-                  backgroundColor: THEME.surface,
-                  borderRadius: 20,
-                  marginBottom: 12,
-                  borderWidth: 1,
-                  borderColor: THEME.borderGlass,
-                }}
+                style={
+                  viewMode === "grid"
+                    ? {
+                        backgroundColor: THEME.surface,
+                        borderRadius: 24,
+                        padding: 16,
+                        width: "48%",
+                        aspectRatio: 1,
+                        marginBottom: 16,
+                        borderWidth: 1,
+                        borderColor: THEME.borderGlass,
+                        justifyContent: "space-between",
+                      }
+                    : {
+                        flexDirection: "row",
+                        alignItems: "center",
+                        padding: 16,
+                        backgroundColor: THEME.surface,
+                        borderRadius: 20,
+                        marginBottom: 12,
+                        borderWidth: 1,
+                        borderColor: THEME.borderGlass,
+                        width: "100%",
+                      }
+                }
               >
                 <View
                   style={{
@@ -1189,46 +1216,51 @@ export default function AllDocumentsScreen() {
                     borderRadius: 14,
                     alignItems: "center",
                     justifyContent: "center",
-                    marginRight: 16,
+                    marginRight: viewMode === "grid" ? 0 : 16,
                     backgroundColor: THEME.surfaceBright,
                   }}
                 >
                   <Feather name="folder" size={20} color="white" />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: viewMode === "grid" ? 0 : 1 }}>
                   <Text
                     style={{
                       color: "white",
                       fontFamily: "SpaceGrotesk_Bold",
                       fontSize: 16,
                       marginBottom: 4,
+                      marginTop: viewMode === "grid" ? 8 : 0,
                     }}
-                    numberOfLines={1}
+                    numberOfLines={viewMode === "grid" ? 2 : 1}
                   >
                     {folder.name}
                   </Text>
-                  <Text
+                  {viewMode === "list" && (
+                    <Text
+                      style={{
+                        color: THEME.textMuted,
+                        fontFamily: "Manrope_Bold",
+                        fontSize: 12,
+                      }}
+                    >
+                      Secure Folder
+                    </Text>
+                  )}
+                </View>
+                {viewMode === "list" && (
+                  <View
                     style={{
-                      color: THEME.textMuted,
-                      fontFamily: "Manrope_Bold",
-                      fontSize: 12,
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: THEME.surfaceBright,
+                      alignItems: "center",
+                      justifyContent: "center",
                     }}
                   >
-                    Secure Folder
-                  </Text>
-                </View>
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: THEME.surfaceBright,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Feather name="chevron-right" size={16} color="white" />
-                </View>
+                    <Feather name="chevron-right" size={16} color="white" />
+                  </View>
+                )}
               </TouchableOpacity>
             ))}
 
@@ -1250,17 +1282,37 @@ export default function AllDocumentsScreen() {
             {documents.map((file) => (
               <TouchableOpacity
                 onPress={() => handleDocumentPress(file)}
-                key={file.id}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  padding: 16,
-                  backgroundColor: THEME.surface,
-                  borderRadius: 20,
-                  marginBottom: 12,
-                  borderWidth: 1,
-                  borderColor: THEME.borderGlass,
+                onLongPress={() => {
+                  setSelectedDocument(file);
+                  setDocumentRenameValue(file.name);
+                  setDocumentActionVisible(true);
                 }}
+                key={file.id}
+                style={
+                  viewMode === "grid"
+                    ? {
+                        backgroundColor: THEME.surface,
+                        borderRadius: 24,
+                        padding: 16,
+                        width: "48%",
+                        aspectRatio: 1,
+                        marginBottom: 16,
+                        borderWidth: 1,
+                        borderColor: THEME.borderGlass,
+                        justifyContent: "space-between",
+                      }
+                    : {
+                        flexDirection: "row",
+                        alignItems: "center",
+                        padding: 16,
+                        backgroundColor: THEME.surface,
+                        borderRadius: 20,
+                        marginBottom: 12,
+                        borderWidth: 1,
+                        borderColor: THEME.borderGlass,
+                        width: "100%",
+                      }
+                }
               >
                 <View
                   style={{
@@ -1269,7 +1321,7 @@ export default function AllDocumentsScreen() {
                     borderRadius: 14,
                     alignItems: "center",
                     justifyContent: "center",
-                    marginRight: 16,
+                    marginRight: viewMode === "grid" ? 0 : 16,
                     backgroundColor: "rgba(255,255,255,0.03)",
                   }}
                 >
@@ -1279,33 +1331,38 @@ export default function AllDocumentsScreen() {
                     color={file.color}
                   />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: viewMode === "grid" ? 0 : 1 }}>
                   <Text
                     style={{
                       color: "white",
                       fontFamily: "SpaceGrotesk_Bold",
                       fontSize: 16,
                       marginBottom: 4,
+                      marginTop: viewMode === "grid" ? 8 : 0,
                     }}
-                    numberOfLines={1}
+                    numberOfLines={viewMode === "grid" ? 2 : 1}
                   >
                     {file.name}
                   </Text>
-                  <Text
-                    style={{
-                      color: THEME.textMuted,
-                      fontFamily: "Manrope_Bold",
-                      fontSize: 12,
-                    }}
-                  >
-                    {file.size}
-                  </Text>
+                  {viewMode === "list" && (
+                    <Text
+                      style={{
+                        color: THEME.textMuted,
+                        fontFamily: "Manrope_Bold",
+                        fontSize: 12,
+                      }}
+                    >
+                      {file.size}
+                    </Text>
+                  )}
                 </View>
-                <Feather
-                  name="more-vertical"
-                  size={20}
-                  color={THEME.textMuted}
-                />
+                {viewMode === "list" && (
+                  <Feather
+                    name="more-vertical"
+                    size={20}
+                    color={THEME.textMuted}
+                  />
+                )}
               </TouchableOpacity>
             ))}
           </View>
@@ -1339,7 +1396,13 @@ export default function AllDocumentsScreen() {
                 color={THEME.accent}
                 style={{ marginBottom: 12 }}
               />
-              <Text style={{ color: "white", fontSize: 20, fontFamily: "SpaceGrotesk_Bold" }}>
+              <Text
+                style={{
+                  color: "white",
+                  fontSize: 20,
+                  fontFamily: "SpaceGrotesk_Bold",
+                }}
+              >
                 Create Folder
               </Text>
               <Text
@@ -1368,7 +1431,9 @@ export default function AllDocumentsScreen() {
                 style={{ flex: 1, padding: 16, alignItems: "center" }}
                 onPress={() => setFolderModalVisible(false)}
               >
-                <Text style={{ color: THEME.textMuted, fontFamily: "Manrope_Bold" }}>
+                <Text
+                  style={{ color: THEME.textMuted, fontFamily: "Manrope_Bold" }}
+                >
                   Cancel
                 </Text>
               </TouchableOpacity>
@@ -1386,7 +1451,12 @@ export default function AllDocumentsScreen() {
                 {creatingFolder ? (
                   <ActivityIndicator color="#3d1a08" />
                 ) : (
-                  <Text style={{ color: "#3d1a08", fontFamily: "SpaceGrotesk_Bold" }}>
+                  <Text
+                    style={{
+                      color: "#3d1a08",
+                      fontFamily: "SpaceGrotesk_Bold",
+                    }}
+                  >
                     Create
                   </Text>
                 )}
@@ -1425,7 +1495,13 @@ export default function AllDocumentsScreen() {
                 marginBottom: 20,
               }}
             >
-              <Text style={{ color: "white", fontSize: 24, fontFamily: "SpaceGrotesk_Bold" }}>
+              <Text
+                style={{
+                  color: "white",
+                  fontSize: 24,
+                  fontFamily: "SpaceGrotesk_Bold",
+                }}
+              >
                 Manage Folders
               </Text>
               <TouchableOpacity onPress={() => setManageFoldersVisible(false)}>
@@ -1570,7 +1646,9 @@ export default function AllDocumentsScreen() {
                 style={{ flex: 1, padding: 16, alignItems: "center" }}
                 onPress={() => setFolderRenameVisible(false)}
               >
-                <Text style={{ color: THEME.textMuted, fontFamily: "Manrope_Bold" }}>
+                <Text
+                  style={{ color: THEME.textMuted, fontFamily: "Manrope_Bold" }}
+                >
                   Cancel
                 </Text>
               </TouchableOpacity>
@@ -1591,7 +1669,12 @@ export default function AllDocumentsScreen() {
                 {renamingFolder ? (
                   <ActivityIndicator color="#3d1a08" />
                 ) : (
-                  <Text style={{ color: "#3d1a08", fontFamily: "SpaceGrotesk_Bold" }}>
+                  <Text
+                    style={{
+                      color: "#3d1a08",
+                      fontFamily: "SpaceGrotesk_Bold",
+                    }}
+                  >
                     Save
                   </Text>
                 )}
@@ -1630,7 +1713,13 @@ export default function AllDocumentsScreen() {
                 marginBottom: 8,
               }}
             >
-              <Text style={{ color: "white", fontSize: 24, fontFamily: "SpaceGrotesk_Bold" }}>
+              <Text
+                style={{
+                  color: "white",
+                  fontSize: 24,
+                  fontFamily: "SpaceGrotesk_Bold",
+                }}
+              >
                 Document Options
               </Text>
               <TouchableOpacity
@@ -1664,7 +1753,13 @@ export default function AllDocumentsScreen() {
               }}
               onPress={openRenameDocument}
             >
-              <Text style={{ color: "white", fontFamily: "Manrope_Bold", fontSize: 16 }}>
+              <Text
+                style={{
+                  color: "white",
+                  fontFamily: "Manrope_Bold",
+                  fontSize: 16,
+                }}
+              >
                 Rename
               </Text>
             </TouchableOpacity>
@@ -1679,7 +1774,13 @@ export default function AllDocumentsScreen() {
               }}
               onPress={openMoveModal}
             >
-              <Text style={{ color: "white", fontFamily: "Manrope_Bold", fontSize: 16 }}>
+              <Text
+                style={{
+                  color: "white",
+                  fontFamily: "Manrope_Bold",
+                  fontSize: 16,
+                }}
+              >
                 Move to Folder
               </Text>
             </TouchableOpacity>
@@ -1696,7 +1797,11 @@ export default function AllDocumentsScreen() {
               disabled={openingDocument}
             >
               <Text
-                style={{ color: "#3d1a08", fontFamily: "SpaceGrotesk_Bold", fontSize: 16 }}
+                style={{
+                  color: "#3d1a08",
+                  fontFamily: "SpaceGrotesk_Bold",
+                  fontSize: 16,
+                }}
               >
                 {openingDocument ? "Opening..." : "View Document"}
               </Text>
@@ -1716,7 +1821,11 @@ export default function AllDocumentsScreen() {
                 <ActivityIndicator color="white" />
               ) : (
                 <Text
-                  style={{ color: "white", fontFamily: "SpaceGrotesk_Bold", fontSize: 16 }}
+                  style={{
+                    color: "white",
+                    fontFamily: "SpaceGrotesk_Bold",
+                    fontSize: 16,
+                  }}
                 >
                   Delete
                 </Text>
@@ -1776,7 +1885,9 @@ export default function AllDocumentsScreen() {
                 style={{ flex: 1, padding: 16, alignItems: "center" }}
                 onPress={() => setDocumentRenameVisible(false)}
               >
-                <Text style={{ color: THEME.textMuted, fontFamily: "Manrope_Bold" }}>
+                <Text
+                  style={{ color: THEME.textMuted, fontFamily: "Manrope_Bold" }}
+                >
                   Cancel
                 </Text>
               </TouchableOpacity>
@@ -1794,7 +1905,12 @@ export default function AllDocumentsScreen() {
                 {renamingDocument ? (
                   <ActivityIndicator color="#3d1a08" />
                 ) : (
-                  <Text style={{ color: "#3d1a08", fontFamily: "SpaceGrotesk_Bold" }}>
+                  <Text
+                    style={{
+                      color: "#3d1a08",
+                      fontFamily: "SpaceGrotesk_Bold",
+                    }}
+                  >
                     Save
                   </Text>
                 )}
@@ -1896,7 +2012,11 @@ export default function AllDocumentsScreen() {
                   }
                 >
                   <Text
-                    style={{ color: "white", fontFamily: "Manrope_Bold", fontSize: 15 }}
+                    style={{
+                      color: "white",
+                      fontFamily: "Manrope_Bold",
+                      fontSize: 15,
+                    }}
                     numberOfLines={1}
                   >
                     {folder.name}
@@ -1919,7 +2039,9 @@ export default function AllDocumentsScreen() {
                   setMoveStack([]);
                 }}
               >
-                <Text style={{ color: THEME.textMuted, fontFamily: "Manrope_Bold" }}>
+                <Text
+                  style={{ color: THEME.textMuted, fontFamily: "Manrope_Bold" }}
+                >
                   Cancel
                 </Text>
               </TouchableOpacity>
@@ -1937,7 +2059,12 @@ export default function AllDocumentsScreen() {
                 {movingDocument ? (
                   <ActivityIndicator color="#3d1a08" />
                 ) : (
-                  <Text style={{ color: "#3d1a08", fontFamily: "SpaceGrotesk_Bold" }}>
+                  <Text
+                    style={{
+                      color: "#3d1a08",
+                      fontFamily: "SpaceGrotesk_Bold",
+                    }}
+                  >
                     Move Here
                   </Text>
                 )}
@@ -1981,7 +2108,11 @@ export default function AllDocumentsScreen() {
                 }}
               >
                 <Text
-                  style={{ color: "white", fontSize: 24, fontFamily: "SpaceGrotesk_Bold" }}
+                  style={{
+                    color: "white",
+                    fontSize: 24,
+                    fontFamily: "SpaceGrotesk_Bold",
+                  }}
                 >
                   Create Note
                 </Text>

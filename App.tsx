@@ -12,6 +12,7 @@ import DashboardScreen from "./src/screens/DashboardScreen";
 import AllDocumentsScreen from "./src/screens/AllDocumentsScreen";
 import DocumentViewerScreen from "./src/screens/DocumentViewerScreen";
 import ScannerScreen from "./src/screens/ScannerScreen";
+import ProfileScreen from "./src/screens/ProfileScreen";
 
 import * as Linking from "expo-linking";
 import { useFonts } from 'expo-font';
@@ -42,6 +43,7 @@ const linking = {
       AllDocuments: "documents",
       DocumentViewer: "viewer",
       Scanner: "scanner",
+      Profile: "profile",
     },
   },
 };
@@ -136,6 +138,7 @@ export default function App() {
               component={DocumentViewerScreen}
             />
             <Stack.Screen name="Scanner" component={ScannerScreen} />
+            <Stack.Screen name="Profile" component={ProfileScreen} />
           </>
         )}
       </Stack.Navigator>

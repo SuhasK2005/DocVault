@@ -111,29 +111,34 @@ export default function CropScreen({ imageUri, onBack, onCropped }: Props) {
   const imageRectRef = React.useRef(imageRect);
   imageRectRef.current = imageRect;
 
+  const initialPointsRef = React.useRef<CropPoint[]>([]);
+
   const panResponders = React.useRef(
     [0, 1, 2, 3].map((index) =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          initialPointsRef.current = [...pointsRef.current];
+        },
         onPanResponderMove: (
           _: GestureResponderEvent,
           gesture: PanResponderGestureState,
         ) => {
           const ir = imageRectRef.current;
-          if (!ir) return;
+          const initial = initialPointsRef.current[index];
+          if (!ir || !initial) return;
+
           setPoints((prev) => {
             const next = [...prev];
-            const current = prev[index];
-            if (!current) return prev;
             next[index] = {
               x: clamp(
-                current.x + gesture.dx,
+                initial.x + gesture.dx,
                 ir.x,
                 ir.x + ir.width,
               ),
               y: clamp(
-                current.y + gesture.dy,
+                initial.y + gesture.dy,
                 ir.y,
                 ir.y + ir.height,
               ),

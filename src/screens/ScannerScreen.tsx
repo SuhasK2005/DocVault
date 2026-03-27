@@ -176,7 +176,13 @@ export default function ScannerScreen() {
             setCapturedUri(uri);
             setStep("crop");
           }}
-          onCancel={() => navigation.goBack()}
+          onCancel={() => {
+            if (pages.length > 0) {
+              setStep("preview");
+            } else {
+              navigation.goBack();
+            }
+          }}
         />
       );
     }

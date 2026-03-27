@@ -664,25 +664,27 @@ export default function DashboardScreen() {
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
           <Feather name="search" size={22} color={THEME.textMuted} />
-          {user?.user_metadata?.avatar_url ? (
-            <Image
-              source={{ uri: user.user_metadata.avatar_url }}
-              style={{ width: 32, height: 32, borderRadius: 16 }}
-            />
-          ) : (
-            <View
-              style={{
-                width: 32,
-                height: 32,
-                backgroundColor: THEME.surfaceBright,
-                borderRadius: 16,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Feather name="user" size={16} color="white" />
-            </View>
-          )}
+          <TouchableOpacity onPress={() => navigation.navigate("Profile")}>
+            {user?.user_metadata?.avatar_url ? (
+              <Image
+                source={{ uri: user.user_metadata.avatar_url }}
+                style={{ width: 32, height: 32, borderRadius: 16 }}
+              />
+            ) : (
+              <View
+                style={{
+                  width: 32,
+                  height: 32,
+                  backgroundColor: THEME.surfaceBright,
+                  borderRadius: 16,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Feather name="user" size={16} color="white" />
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -691,10 +693,10 @@ export default function DashboardScreen() {
         <View style={{ paddingHorizontal: 24, paddingBottom: 32 }}>
           <Text
             style={{
-              color: THEME.accent,
+              color: THEME.textMuted,
               fontFamily: "SpaceGrotesk_Bold",
-              fontSize: 10,
-              letterSpacing: 4,
+              fontSize: 13,
+              letterSpacing: 2,
               marginBottom: 8,
               textTransform: "uppercase",
             }}
@@ -782,11 +784,11 @@ export default function DashboardScreen() {
             />
             <Text
               style={{
-                color: THEME.accent,
-                fontSize: 10,
+                color: THEME.textMuted,
+                fontSize: 13,
                 fontFamily: "SpaceGrotesk_Bold",
                 textAlign: "center",
-                lineHeight: 14,
+                lineHeight: 18,
               }}
             >
               SCAN{"\n"}DOCUMENT
@@ -795,7 +797,17 @@ export default function DashboardScreen() {
 
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => openFolderPicker("uploadFiles")}
+            onPress={() => {
+              Alert.alert(
+                "Upload to Vault",
+                "Choose an asset source",
+                [
+                  { text: "Upload Files", onPress: () => openFolderPicker("uploadFiles") },
+                  { text: "Add from Gallery", onPress: () => openFolderPicker("uploadGallery") },
+                  { text: "Cancel", style: "cancel" }
+                ]
+              );
+            }}
             style={{
               flex: 1,
               backgroundColor: THEME.surface,
@@ -813,11 +825,11 @@ export default function DashboardScreen() {
             />
             <Text
               style={{
-                color: THEME.accent,
-                fontSize: 10,
+                color: THEME.textMuted,
+                fontSize: 13,
                 fontFamily: "SpaceGrotesk_Bold",
                 textAlign: "center",
-                lineHeight: 14,
+                lineHeight: 18,
               }}
             >
               UPLOAD{"\n"}FILE
@@ -844,11 +856,11 @@ export default function DashboardScreen() {
             />
             <Text
               style={{
-                color: THEME.accent,
-                fontSize: 10,
+                color: THEME.textMuted,
+                fontSize: 13,
                 fontFamily: "SpaceGrotesk_Bold",
                 textAlign: "center",
-                lineHeight: 14,
+                lineHeight: 18,
               }}
             >
               ADD{"\n"}NOTE
