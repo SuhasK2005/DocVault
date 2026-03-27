@@ -29,7 +29,6 @@ import {
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
-import * as Print from "expo-print";
 import { supabase } from "../services/supabase";
 import { useAuthStore } from "../stores/useAuthStore";
 
@@ -49,19 +48,6 @@ type DocumentNode = {
   storage_path: string;
   type: string;
   color: string;
-};
-
-const withTimeout = async <T,>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  message: string,
-) => {
-  return Promise.race<T>([
-    promise,
-    new Promise<T>((_, reject) => {
-      setTimeout(() => reject(new Error(message)), timeoutMs);
-    }),
-  ]);
 };
 
 export default function AllDocumentsScreen() {
@@ -96,9 +82,6 @@ export default function AllDocumentsScreen() {
   const [folderRenameValue, setFolderRenameValue] = useState("");
   const [renamingFolder, setRenamingFolder] = useState(false);
 
-  const [scanModalVisible, setScanModalVisible] = useState(false);
-  const [scannedImageUri, setScannedImageUri] = useState<string | null>(null);
-  const [scannedFileName, setScannedFileName] = useState("");
   const [noteModalVisible, setNoteModalVisible] = useState(false);
   const [noteTitle, setNoteTitle] = useState("");
   const [noteContent, setNoteContent] = useState("");
@@ -463,85 +446,10 @@ export default function AllDocumentsScreen() {
       return;
     }
 
-    try {
-      const permissionResult =
-        await ImagePicker.requestCameraPermissionsAsync();
-      if (!permissionResult.granted) {
-        Alert.alert("Permission Required", "Camera access is needed.");
-        return;
-      }
-
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        quality: 0.8,
-      });
-      if (!result.canceled) {
-        setScannedImageUri(result.assets[0].uri);
-        setScanModalVisible(true);
-      }
-    } catch (err: any) {
-      Alert.alert("Error", err?.message || "Could not open camera");
-    }
-  };
-
-  const handleSaveScannedDoc = async () => {
-    if (!scannedImageUri || !scannedFileName.trim()) {
-      Alert.alert("Required", "Please enter a file name.");
-      return;
-    }
-    if (!currentFolderId) {
-      Alert.alert(
-        "Folder Required",
-        "Open a folder and scan inside that folder.",
-      );
-      return;
-    }
-
-    setUploading(true);
-    try {
-      const html = `<html><body style="margin:0;padding:0;display:flex;justify-content:center;align-items:center;height:100vh;"><img src="${scannedImageUri}" style="max-width:100%;max-height:100%;object-fit:contain;"/></body></html>`;
-      const { uri: pdfUri } = await Print.printToFileAsync({ html });
-
-      const fileBase64 = await FileSystem.readAsStringAsync(pdfUri, {
-        // @ts-ignore
-        encoding: "base64",
-      });
-
-      const fileName = scannedFileName.endsWith(".pdf")
-        ? scannedFileName
-        : `${scannedFileName}.pdf`;
-      const storagePath = `${user?.id}/${Date.now()}-${fileName}`;
-      const { Buffer } = require("buffer");
-      const fileBuffer = Buffer.from(fileBase64, "base64");
-
-      const { error: uploadError } = await supabase.storage
-        .from("vault_documents")
-        .upload(storagePath, fileBuffer, { contentType: "application/pdf" });
-
-      if (uploadError) throw uploadError;
-
-      const { error: dbError } = await supabase.from("documents").insert({
-        user_id: user?.id,
-        folder_id: currentFolderId,
-        name: fileName,
-        size_bytes: fileBase64.length * 0.75,
-        mime_type: "application/pdf",
-        storage_path: storagePath,
-        is_encrypted: false,
-      });
-
-      if (dbError) throw dbError;
-
-      Alert.alert("Success", "Scanned document saved.");
-      setScanModalVisible(false);
-      setScannedFileName("");
-      setScannedImageUri(null);
-      fetchAllDocuments();
-    } catch (err: any) {
-      Alert.alert("Error", err?.message || "Could not save scanned document");
-    } finally {
-      setUploading(false);
-    }
+    navigation.navigate("Scanner", {
+      folderId: currentFolderId,
+      folderName: currentFolderName,
+    });
   };
 
   const handleCreateNote = async () => {
@@ -767,13 +675,27 @@ export default function AllDocumentsScreen() {
   };
 
   const handleRenameFolder = async () => {
+    console.log("[FolderRename] submit", {
+      selectedFolderId: selectedFolderForRename?.id ?? null,
+      currentValue: folderRenameValue,
+      userId: user?.id ?? null,
+    });
+
     if (!selectedFolderForRename?.id || !folderRenameValue.trim()) {
+      console.log("[FolderRename] blocked: missing folder id or empty name");
       Alert.alert("Required", "Folder name is required.");
       return;
     }
+    if (!user?.id) {
+      console.log("[FolderRename] blocked: missing user session");
+      Alert.alert("Session Error", "Please sign in again and retry.");
+      return;
+    }
 
+    const folderId = selectedFolderForRename.id;
     const updatedName = folderRenameValue.trim();
     if (updatedName === selectedFolderForRename.name) {
+      console.log("[FolderRename] no-op: same folder name");
       setFolderRenameVisible(false);
       setSelectedFolderForRename(null);
       setFolderRenameValue("");
@@ -782,16 +704,24 @@ export default function AllDocumentsScreen() {
 
     try {
       setRenamingFolder(true);
-      const { data, error } = await withTimeout(
-        supabase
-          .from("folders")
-          .update({ name: updatedName })
-          .eq("id", selectedFolderForRename.id)
-          .select("id")
-          .maybeSingle(),
-        10000,
-        "Rename is taking too long. Please check your connection and try again.",
-      );
+      console.log("[FolderRename] updating", {
+        folderId,
+        updatedName,
+        userId: user.id,
+      });
+
+      const { data, error } = await supabase
+        .from("folders")
+        .update({ name: updatedName })
+        .eq("id", folderId)
+        .eq("user_id", user.id)
+        .select("id")
+        .maybeSingle();
+
+      console.log("[FolderRename] response", {
+        data,
+        error,
+      });
 
       if (error) throw error;
       if (!data?.id) {
@@ -800,23 +730,17 @@ export default function AllDocumentsScreen() {
 
       setFolders((prev) =>
         prev.map((folder) =>
-          folder.id === selectedFolderForRename.id
-            ? { ...folder, name: updatedName }
-            : folder,
+          folder.id === folderId ? { ...folder, name: updatedName } : folder,
         ),
       );
       setAllFolders((prev) =>
         prev.map((folder) =>
-          folder.id === selectedFolderForRename.id
-            ? { ...folder, name: updatedName }
-            : folder,
+          folder.id === folderId ? { ...folder, name: updatedName } : folder,
         ),
       );
       setFolderStack((prev) =>
         prev.map((entry) =>
-          entry.id === selectedFolderForRename.id
-            ? { ...entry, name: updatedName }
-            : entry,
+          entry.id === folderId ? { ...entry, name: updatedName } : entry,
         ),
       );
 
@@ -824,8 +748,10 @@ export default function AllDocumentsScreen() {
       setSelectedFolderForRename(null);
       setFolderRenameValue("");
       fetchFolders();
+      console.log("[FolderRename] success", { folderId, updatedName });
       Alert.alert("Renamed", "Folder renamed successfully.");
     } catch (err: any) {
+      console.error("[FolderRename] failed", err);
       Alert.alert("Error", err?.message || "Could not rename folder");
     } finally {
       setRenamingFolder(false);
@@ -1177,7 +1103,10 @@ export default function AllDocumentsScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 className="flex-1 bg-black py-4 rounded-xl items-center"
-                onPress={handleRenameFolder}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  handleRenameFolder();
+                }}
                 disabled={renamingFolder}
               >
                 {renamingFolder ? (
@@ -1346,54 +1275,6 @@ export default function AllDocumentsScreen() {
                   <ActivityIndicator color="white" />
                 ) : (
                   <Text className="font-bold text-white">Move Here</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={scanModalVisible} transparent animationType="fade">
-        <View className="flex-1 justify-center items-center bg-black/60">
-          <View className="bg-white p-6 rounded-[32px] w-[85%] items-center shadow-2xl">
-            <Feather
-              name="file-text"
-              size={40}
-              color="#4F46E5"
-              className="mb-4"
-            />
-            <Text className="text-xl font-black text-black mb-2 text-center">
-              Save Scanned Document
-            </Text>
-            <Text className="text-neutral-500 text-center mb-6">
-              Enter a name for your PDF document.
-            </Text>
-            <TextInput
-              className="w-full bg-neutral-100 rounded-2xl p-4 text-left text-lg font-bold mb-6"
-              value={scannedFileName}
-              onChangeText={setScannedFileName}
-              placeholder="e.g. Scan"
-            />
-            <View className="flex-row w-full gap-2">
-              <TouchableOpacity
-                className="flex-1 bg-neutral-200 py-4 rounded-xl items-center"
-                onPress={() => {
-                  setScanModalVisible(false);
-                  setScannedImageUri(null);
-                  setScannedFileName("");
-                }}
-              >
-                <Text className="font-bold text-black">Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="flex-1 bg-[#4F46E5] py-4 rounded-xl items-center"
-                onPress={handleSaveScannedDoc}
-                disabled={uploading}
-              >
-                {uploading ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <Text className="font-bold text-white">Save PDF</Text>
                 )}
               </TouchableOpacity>
             </View>

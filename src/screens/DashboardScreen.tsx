@@ -352,25 +352,13 @@ export default function DashboardScreen() {
       });
       await new Promise((resolve) => setTimeout(resolve, 350));
 
-      const permissionResult =
-        await ImagePicker.requestCameraPermissionsAsync();
-      if (!permissionResult.granted) {
-        Alert.alert(
-          "Permission Required",
-          "Camera access is needed to scan documents",
-        );
-        return;
-      }
-
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        quality: 0.8,
+      // Instead of using ImagePicker here, we will navigate to our new Scanner feature
+      navigation.navigate("Scanner", {
+        folderId: activeDestinationFolderId,
+        folderName: currentPickerFolderName,
       });
-
-      if (!result.canceled && result.assets?.length) {
-        setScannedImageUri(result.assets[0].uri);
-        setScanModalVisible(true);
-      }
+      // Close the picker
+      setScanModalVisible(false);
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to open camera");
     } finally {

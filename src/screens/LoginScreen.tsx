@@ -3,15 +3,14 @@ import {
   View,
   Text,
   TouchableOpacity,
-  Animated,
   Alert,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthStore } from "../stores/useAuthStore";
 import { StatusBar } from "expo-status-bar";
 import { Feather } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import * as WebBrowser from "expo-web-browser";
 import * as AuthSession from "expo-auth-session";
 import * as Linking from "expo-linking";
@@ -21,27 +20,6 @@ WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const [isLoading, setIsLoading] = React.useState(false);
-  const pulse = React.useRef(new Animated.Value(0.95)).current;
-
-  React.useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: 1800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulse, {
-          toValue: 0.95,
-          duration: 1800,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-
-    loop.start();
-    return () => loop.stop();
-  }, [pulse]);
 
   const handleGoogleLogin = async () => {
     if (isLoading) {
@@ -50,14 +28,12 @@ export default function LoginScreen() {
 
     const redirectTo = AuthSession.makeRedirectUri();
 
-    console.log("Expected Return URL:", redirectTo);
-
     setIsLoading(true);
     try {
       if (!isSupabaseConfigured) {
         Alert.alert(
           "Configure Supabase",
-          "Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in your environment before using Google login.",
+          "Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in your environment before using Google login."
         );
         return;
       }
@@ -84,15 +60,13 @@ export default function LoginScreen() {
 
       const result = await WebBrowser.openAuthSessionAsync(
         data.url,
-        redirectTo,
+        redirectTo
       );
 
       if (result.type !== "success" || !result.url) {
         return;
       }
 
-      // Handle # fragments which Supabase sometimes returns instead of ? query params
-      // depending on the implicit vs explicit flow settings.
       const urlToParse = result.url.replace("#", "?");
       const parsed = Linking.parse(urlToParse);
 
@@ -100,8 +74,8 @@ export default function LoginScreen() {
         typeof parsed.queryParams?.error_description === "string"
           ? parsed.queryParams.error_description
           : typeof parsed.queryParams?.error === "string"
-            ? parsed.queryParams.error
-            : null;
+          ? parsed.queryParams.error
+          : null;
 
       if (authError) {
         throw new Error(authError);
@@ -113,7 +87,6 @@ export default function LoginScreen() {
           : null;
 
       if (!code) {
-        // Try getting access_token if implicit flow was used
         const access_token =
           parsed.queryParams?.access_token &&
           typeof parsed.queryParams.access_token === "string"
@@ -138,7 +111,7 @@ export default function LoginScreen() {
         }
 
         throw new Error(
-          "No auth code or access token returned from Google OAuth.",
+          "No auth code or access token returned from Google OAuth."
         );
       }
 
@@ -148,89 +121,288 @@ export default function LoginScreen() {
         throw exchangeError;
       }
 
-      // Force an update to the auth store with the newly acquired session
-      // This will trigger App.tsx to unmount LoginScreen and mount Dashboard/Unlock
       useAuthStore.getState().setSession(sessionData.session);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Google sign-in failed";
       Alert.alert(
         "Login Failed",
-        `${message}\n\nEnsure this Redirect URL is in Supabase:\n${redirectTo}`,
+        `${message}\n\nEnsure this Redirect URL is in Supabase:\n${redirectTo}`
       );
     } finally {
       setIsLoading(false);
     }
   };
 
+  const THEME = {
+    bg: "#121212",
+    accent: "#FF8A4C", // Orange/Coral from the image
+    cardBg: "#1C1C1E",
+    cardBorder: "#2C2C2E",
+    btnDark: "#262628",
+    textMuted: "#A1A1AA",
+  };
+
   return (
-    <View className="flex-1 bg-[#0A0A0A]">
+    <View style={{ flex: 1, backgroundColor: THEME.bg }}>
       <StatusBar style="light" hidden={true} />
 
-      {/* Dynamic Background abstract shapes */}
-      <Animated.View
-        style={{ transform: [{ scale: pulse }] }}
-        className="absolute top-[-10%] right-[-10%] w-[120%] h-[60%] opacity-30 rounded-full blur-[100px]"
-      >
-        <LinearGradient
-          colors={[
-            "rgba(79, 70, 229, 0.4)",
-            "rgba(6, 182, 212, 0.1)",
-            "transparent",
-          ]}
-          className="flex-1 rounded-full"
-        />
-      </Animated.View>
-
-      <SafeAreaView className="flex-1 justify-between px-8 pb-12 pt-24">
-        <View>
-          <View className="w-16 h-16 bg-white/10 rounded-3xl items-center justify-center mb-10 border border-white/10">
-            <Feather name="shield" size={28} color="#D4D4D8" />
+      <SafeAreaView className="flex-1 justify-between px-6 pb-10 pt-16">
+        {/* Top Section: Icon & Branding */}
+        <View className="items-center">
+          <View
+            style={{
+              width: 56,
+              height: 64,
+              backgroundColor: "rgba(255,138,76,0.06)", // Slight orange tint
+              borderRadius: 16,
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: 1,
+              borderColor: "rgba(255,138,76,0.15)",
+              marginBottom: 16,
+            }}
+          >
+            <Feather name="shield" size={28} color={THEME.accent} />
           </View>
 
-          <Text className="text-[60px] font-black text-white leading-[65px] tracking-tighter">
-            Fortify.{"\n"}Everything.
+          <Text
+            style={{
+              color: THEME.textMuted,
+              fontWeight: "800",
+              fontSize: 11,
+              letterSpacing: 6,
+              marginBottom: 48,
+            }}
+          >
+            KINETIC VAULT
           </Text>
 
-          <Text className="mt-6 text-lg text-neutral-400 font-medium tracking-tight pr-4 leading-relaxed">
-            The world's most elegant zero-knowledge vault. Your keys, your data,
-            absolute privacy.
+          {/* Hero Typography */}
+          <Text
+            style={{
+              fontSize: 44,
+              fontWeight: "900",
+              color: "white",
+              textAlign: "center",
+              lineHeight: 48,
+              letterSpacing: -1,
+            }}
+          >
+            Secure Your
+          </Text>
+          <Text
+            style={{
+              fontSize: 44,
+              fontWeight: "900",
+              color: THEME.accent,
+              textAlign: "center",
+              lineHeight: 48,
+              letterSpacing: -1,
+            }}
+          >
+            Digital Vault
+          </Text>
+
+          {/* Subtitle */}
+          <Text
+            style={{
+              marginTop: 28,
+              fontSize: 15,
+              color: THEME.textMuted,
+              textAlign: "center",
+              lineHeight: 24,
+              paddingHorizontal: 12,
+              fontWeight: "400",
+            }}
+          >
+            Step into the high-end private{"\n"}
+            environment for your most sensitive data.{"\n"}
+            Weightless security, editorial precision,{"\n"}
+            and absolute privacy.
           </Text>
         </View>
 
-        <View className="w-full space-y-5">
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={handleGoogleLogin}
-            className="w-full overflow-hidden rounded-[32px]"
+        {/* Login Card Layer */}
+        <View className="items-center w-full">
+          <View
+            style={{
+              width: "100%",
+              backgroundColor: THEME.cardBg,
+              borderRadius: 32,
+              padding: 24,
+              paddingVertical: 32,
+              borderWidth: 1,
+              borderColor: THEME.cardBorder,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 20 },
+              shadowOpacity: 0.5,
+              shadowRadius: 30,
+              elevation: 10,
+            }}
           >
-            <LinearGradient
-              colors={["#ffffff", "#e4e4e7"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              className="py-5 px-8 flex-row items-center justify-between"
+            {/* Primary Google Button */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={handleGoogleLogin}
+              disabled={isLoading}
+              style={{
+                backgroundColor: THEME.accent,
+                borderRadius: 16,
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
-              <View className="flex-row items-center">
-                <View className="w-10 h-10 bg-black rounded-full items-center justify-center mr-4">
-                  <Feather name="globe" size={18} color="white" />
-                </View>
-                <Text className="text-black text-xl font-bold tracking-tight">
-                  {isLoading ? "Connecting..." : "Initiate Uplink"}
-                </Text>
-              </View>
               {isLoading ? (
-                <ActivityIndicator size="small" color="#000000" />
+                <ActivityIndicator size="small" color="black" />
               ) : (
-                <Feather name="arrow-right" size={24} color="black" />
+                <>
+                  <View
+                    style={{
+                      width: 28,
+                      height: 28,
+                      backgroundColor: "white",
+                      borderRadius: 14,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      position: "absolute",
+                      left: 16,
+                    }}
+                  >
+                    {/* Simplified Google 'G' using an image or text */}
+                    <Text
+                      style={{
+                        fontWeight: "900",
+                        color: "#4285F4",
+                        fontSize: 16,
+                      }}
+                    >
+                      G
+                    </Text>
+                  </View>
+                  <Text
+                    style={{
+                      color: "black",
+                      fontWeight: "700",
+                      fontSize: 16,
+                      marginLeft: 8,
+                    }}
+                  >
+                    Continue with Google
+                  </Text>
+                </>
               )}
-            </LinearGradient>
-          </TouchableOpacity>
+            </TouchableOpacity>
 
-          <View className="flex-row items-center justify-center space-x-2 mt-4">
-            <Feather name="lock" size={14} color="#52525B" />
-            <Text className="text-neutral-500 font-semibold tracking-wide text-xs uppercase">
-              E2E ENCRYPTED ARCHITECTURE
-            </Text>
+            {/* Separator */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginVertical: 24,
+              }}
+            >
+              <View
+                style={{ flex: 1, height: 1, backgroundColor: "#333333" }}
+              />
+              <Text
+                style={{
+                  color: "#666666",
+                  fontSize: 10,
+                  fontWeight: "700",
+                  letterSpacing: 1.5,
+                  marginHorizontal: 12,
+                }}
+              >
+                SECURED ENTRY
+              </Text>
+              <View
+                style={{ flex: 1, height: 1, backgroundColor: "#333333" }}
+              />
+            </View>
+
+            {/* Placeholder Key-File Button */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() =>
+                Alert.alert("Key-File Access", "This feature is coming soon.")
+              }
+              style={{
+                backgroundColor: THEME.btnDark,
+                borderRadius: 16,
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Feather
+                name="key"
+                size={16}
+                color="#A1A1AA"
+                style={{ position: "absolute", left: 20 }}
+              />
+              <Text
+                style={{
+                  color: "white",
+                  fontWeight: "500",
+                  fontSize: 15,
+                }}
+              >
+                Use Key-File Access
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Footer Area */}
+        <View className="items-center mt-6">
+          <Text
+            style={{
+              color: "#555555",
+              fontSize: 12,
+              marginBottom: 16,
+            }}
+          >
+            By entering, you agree to our{" "}
+            <Text style={{ color: "#888888" }}>Digital Statutes</Text>
+          </Text>
+
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 24 }}>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+            >
+              <Feather name="lock" size={12} color="#666666" />
+              <Text
+                style={{
+                  color: "#666666",
+                  fontSize: 10,
+                  fontWeight: "700",
+                  letterSpacing: 1,
+                }}
+              >
+                AES-256
+              </Text>
+            </View>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+            >
+              <Feather name="share-2" size={12} color="#666666" />
+              <Text
+                style={{
+                  color: "#666666",
+                  fontSize: 10,
+                  fontWeight: "700",
+                  letterSpacing: 1,
+                }}
+              >
+                P2P NODE
+              </Text>
+            </View>
           </View>
         </View>
       </SafeAreaView>

@@ -31,6 +31,6 @@
     "updates": {
       "fallbackToCacheTimeout": 0
     },
-    "plugins": ["expo-secure-store", "expo-web-browser", "expo-font"]
+    "plugins": ["expo-secure-store", "expo-web-browser", "expo-font", "expo-camera"]
   }
 }
