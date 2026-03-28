@@ -49,6 +49,7 @@ type DocumentNode = {
   storage_path: string;
   type: string;
   color: string;
+  created_at?: string;
 };
 
 export default function AllDocumentsScreen() {
@@ -188,6 +189,7 @@ export default function AllDocumentsScreen() {
         size: formatBytes(doc.size_bytes),
         mime_type: doc.mime_type,
         storage_path: doc.storage_path,
+        created_at: doc.created_at,
         ...getFileIconAndColor(doc.mime_type),
       })) as DocumentNode[];
 
@@ -608,8 +610,8 @@ export default function AllDocumentsScreen() {
     setMoveModalVisible(true);
   };
 
-  const openDocumentViewer = () => {
-    if (!selectedDocument?.storage_path || openingDocument) {
+  const openDocumentViewer = (doc: DocumentNode | null = selectedDocument) => {
+    if (!doc?.storage_path || openingDocument) {
       return;
     }
 
@@ -617,10 +619,10 @@ export default function AllDocumentsScreen() {
     setDocumentActionVisible(false);
 
     navigation.navigate("DocumentViewer", {
-      id: selectedDocument.id,
-      name: selectedDocument.name,
-      storagePath: selectedDocument.storage_path,
-      mimeType: selectedDocument.mime_type,
+      id: doc.id,
+      name: doc.name,
+      storagePath: doc.storage_path,
+      mimeType: doc.mime_type,
     });
 
     setTimeout(() => setOpeningDocument(false), 350);
@@ -843,6 +845,31 @@ export default function AllDocumentsScreen() {
     textMuted: "#adaaaa",
     borderGlass: "rgba(173, 170, 170, 0.1)",
   };
+
+  const filteredDocumentsForView = useMemo(() => {
+    let list = [...documents];
+
+    // Sorting logic
+    if (sortOrder === "date_desc") {
+      list.sort(
+        (a, b) =>
+          new Date(b.created_at || 0).getTime() -
+          new Date(a.created_at || 0).getTime(),
+      );
+    } else if (sortOrder === "date_asc") {
+      list.sort(
+        (a, b) =>
+          new Date(a.created_at || 0).getTime() -
+          new Date(b.created_at || 0).getTime(),
+      );
+    } else if (sortOrder === "name_asc") {
+      list.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    const q = folderSearch.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((doc) => doc.name.toLowerCase().includes(q));
+  }, [folderSearch, documents, sortOrder]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: THEME.bg }}>
@@ -1167,8 +1194,10 @@ export default function AllDocumentsScreen() {
             style={{
               flexDirection: viewMode === "grid" ? "row" : "column",
               flexWrap: viewMode === "grid" ? "wrap" : "nowrap",
-              justifyContent: "space-between",
+              justifyContent: "flex-start",
               paddingBottom: 40,
+              gap: viewMode === "grid" ? 16 : 0,
+              rowGap: viewMode === "grid" ? 16 : 0,
             }}
           >
 
@@ -1189,9 +1218,9 @@ export default function AllDocumentsScreen() {
                         backgroundColor: THEME.surface,
                         borderRadius: 24,
                         padding: 16,
-                        width: "48%",
+                        width: "47.5%",
                         aspectRatio: 1,
-                        marginBottom: 16,
+                        marginBottom: 0,
                         borderWidth: 1,
                         borderColor: THEME.borderGlass,
                         justifyContent: "space-between",
@@ -1264,24 +1293,25 @@ export default function AllDocumentsScreen() {
               </TouchableOpacity>
             ))}
 
-            {documents.length > 0 && (
+            {filteredDocumentsForView.length > 0 && (
               <Text
                 style={{
                   color: THEME.textMuted,
-                  fontSize: 12,
+                  fontSize: 13,
                   fontFamily: "SpaceGrotesk_Bold",
                   marginVertical: 12,
                   marginLeft: 4,
-                  letterSpacing: 1,
+                  letterSpacing: 2,
+                  width: "100%",
                 }}
               >
                 FILES
               </Text>
             )}
 
-            {documents.map((file) => (
+            {filteredDocumentsForView.map((file) => (
               <TouchableOpacity
-                onPress={() => handleDocumentPress(file)}
+                onPress={() => openDocumentViewer(file)}
                 onLongPress={() => {
                   setSelectedDocument(file);
                   setDocumentRenameValue(file.name);
@@ -1294,9 +1324,9 @@ export default function AllDocumentsScreen() {
                         backgroundColor: THEME.surface,
                         borderRadius: 24,
                         padding: 16,
-                        width: "48%",
+                        width: "47.5%",
                         aspectRatio: 1,
-                        marginBottom: 16,
+                        marginBottom: 0,
                         borderWidth: 1,
                         borderColor: THEME.borderGlass,
                         justifyContent: "space-between",
@@ -1782,28 +1812,6 @@ export default function AllDocumentsScreen() {
                 }}
               >
                 Move to Folder
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={{
-                backgroundColor: THEME.accent,
-                padding: 16,
-                borderRadius: 16,
-                alignItems: "center",
-                marginBottom: 12,
-              }}
-              onPress={openDocumentViewer}
-              disabled={openingDocument}
-            >
-              <Text
-                style={{
-                  color: "#3d1a08",
-                  fontFamily: "SpaceGrotesk_Bold",
-                  fontSize: 16,
-                }}
-              >
-                {openingDocument ? "Opening..." : "View Document"}
               </Text>
             </TouchableOpacity>
 
