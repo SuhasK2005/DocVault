@@ -172,7 +172,7 @@ export default function PreviewScreen({
             <ActivityIndicator color="#3d1a08" />
           ) : (
             <Text style={{ color: "#3d1a08", fontFamily: "SpaceGrotesk_Bold", fontSize: 18 }}>
-              SECURE & UPLOAD PDF
+              UPLOAD PDF
             </Text>
           )}
         </TouchableOpacity>

@@ -766,7 +766,7 @@ export default function DashboardScreen() {
         >
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => openFolderPicker("scan")}
+            onPress={() => navigation.navigate("Scanner")}
             style={{
               flex: 1,
               backgroundColor: THEME.surface,
@@ -785,7 +785,7 @@ export default function DashboardScreen() {
             <Text
               style={{
                 color: THEME.textMuted,
-                fontSize: 13,
+                fontSize: 12,
                 fontFamily: "SpaceGrotesk_Bold",
                 textAlign: "center",
                 lineHeight: 18,
@@ -826,7 +826,7 @@ export default function DashboardScreen() {
             <Text
               style={{
                 color: THEME.textMuted,
-                fontSize: 13,
+                fontSize: 12,
                 fontFamily: "SpaceGrotesk_Bold",
                 textAlign: "center",
                 lineHeight: 18,
@@ -857,7 +857,7 @@ export default function DashboardScreen() {
             <Text
               style={{
                 color: THEME.textMuted,
-                fontSize: 13,
+                fontSize: 12,
                 fontFamily: "SpaceGrotesk_Bold",
                 textAlign: "center",
                 lineHeight: 18,
