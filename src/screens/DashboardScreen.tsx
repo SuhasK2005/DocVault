@@ -80,7 +80,7 @@ export default function DashboardScreen() {
 
   const currentPickerFolderId = useMemo(
     () => (pickerStack.length ? pickerStack[pickerStack.length - 1].id : null),
-    [pickerStack]
+    [pickerStack],
   );
 
   const currentPickerFolderName = useMemo(
@@ -88,12 +88,12 @@ export default function DashboardScreen() {
       pickerStack.length
         ? pickerStack[pickerStack.length - 1].name
         : "File Hub",
-    [pickerStack]
+    [pickerStack],
   );
 
   const visiblePickerFolders = useMemo(() => {
     return folders.filter(
-      (folder) => (folder.parent_id || null) === currentPickerFolderId
+      (folder) => (folder.parent_id || null) === currentPickerFolderId,
     );
   }, [folders, currentPickerFolderId]);
 
@@ -107,7 +107,13 @@ export default function DashboardScreen() {
     return parentSet;
   }, [folders]);
 
-  const recentFolders = useMemo(() => folders.slice(0, 4), [folders]);
+  const recentParentFolders = useMemo(
+    () =>
+      folders
+        .filter((folder) => (folder.parent_id || null) === null)
+        .slice(0, 4),
+    [folders],
+  );
 
   const fetchDocumentsCount = async () => {
     if (!user?.id) return;
@@ -129,7 +135,7 @@ export default function DashboardScreen() {
     try {
       const { data, error } = await supabase
         .from("documents")
-        .select("id, name, size_bytes, created_at")
+        .select("id, name, size_bytes, created_at, storage_path, mime_type")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(5);
@@ -173,7 +179,7 @@ export default function DashboardScreen() {
             name: folder.name,
             parent_id: null,
             created_at: folder.created_at,
-          }))
+          })),
         );
         return;
       }
@@ -277,7 +283,7 @@ export default function DashboardScreen() {
           }
 
           await new Promise((resolve) =>
-            setTimeout(resolve, 500 + attempt * 250)
+            setTimeout(resolve, 500 + attempt * 250),
           );
         } finally {
           globalDocumentPickerActive = false;
@@ -327,7 +333,7 @@ export default function DashboardScreen() {
       if (!permission.granted) {
         Alert.alert(
           "Permission Required",
-          "Gallery access is needed to pick images"
+          "Gallery access is needed to pick images",
         );
         return;
       }
@@ -503,7 +509,7 @@ export default function DashboardScreen() {
     if (!supportsNestedFolders && createParentId) {
       Alert.alert(
         "Schema Update Needed",
-        "Nested folders need folders.parent_id in your database. Run migration 03_nested_folders.sql and try again."
+        "Nested folders need folders.parent_id in your database. Run migration 03_nested_folders.sql and try again.",
       );
       return;
     }
@@ -600,7 +606,7 @@ export default function DashboardScreen() {
 
   const formatTimeAgo = (dateString: string) => {
     const seconds = Math.floor(
-      (new Date().getTime() - new Date(dateString).getTime()) / 1000
+      (new Date().getTime() - new Date(dateString).getTime()) / 1000,
     );
     let interval = seconds / 31536000;
     if (interval > 1) return Math.floor(interval) + "y ago";
@@ -622,6 +628,25 @@ export default function DashboardScreen() {
       return { name: "image", color: "#4F46E5" }; // Indigo
     if (ext === "zip") return { name: "archive", color: "#06B6D4" }; // Cyan
     return { name: "file", color: "#A1A1AA" };
+  };
+
+  const openRecentDocument = (doc: {
+    id: string;
+    name: string;
+    storage_path?: string | null;
+    mime_type?: string | null;
+  }) => {
+    if (!doc.storage_path) {
+      Alert.alert("Unavailable", "This document cannot be opened right now.");
+      return;
+    }
+
+    navigation.navigate("DocumentViewer", {
+      id: doc.id,
+      name: doc.name,
+      storagePath: doc.storage_path,
+      mimeType: doc.mime_type || null,
+    });
   };
 
   const THEME = {
@@ -798,15 +823,17 @@ export default function DashboardScreen() {
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => {
-              Alert.alert(
-                "Upload to Vault",
-                "Choose an asset source",
-                [
-                  { text: "Upload Files", onPress: () => openFolderPicker("uploadFiles") },
-                  { text: "Add from Gallery", onPress: () => openFolderPicker("uploadGallery") },
-                  { text: "Cancel", style: "cancel" }
-                ]
-              );
+              Alert.alert("Upload to Vault", "Choose an asset source", [
+                {
+                  text: "Upload Files",
+                  onPress: () => openFolderPicker("uploadFiles"),
+                },
+                {
+                  text: "Add from Gallery",
+                  onPress: () => openFolderPicker("uploadGallery"),
+                },
+                { text: "Cancel", style: "cancel" },
+              ]);
             }}
             style={{
               flex: 1,
@@ -885,14 +912,18 @@ export default function DashboardScreen() {
               onPress={() => navigation.navigate("AllDocuments")}
             >
               <Text
-                style={{ color: THEME.accent, fontFamily: "Manrope_Bold", fontSize: 13 }}
+                style={{
+                  color: THEME.accent,
+                  fontFamily: "Manrope_Bold",
+                  fontSize: 13,
+                }}
               >
                 See All
               </Text>
             </TouchableOpacity>
           </View>
 
-          {recentFolders.length === 0 ? (
+          {recentParentFolders.length === 0 ? (
             <View
               style={{
                 backgroundColor: THEME.surface,
@@ -911,7 +942,7 @@ export default function DashboardScreen() {
               showsHorizontalScrollIndicator={false}
               style={{ overflow: "visible" }}
             >
-              {recentFolders.map((folder, index) => (
+              {recentParentFolders.map((folder) => (
                 <TouchableOpacity
                   key={folder.id}
                   activeOpacity={0.8}
@@ -990,8 +1021,10 @@ export default function DashboardScreen() {
             recentDocs.map((doc) => {
               const { name, color } = getDocIconAndColor(doc.name);
               return (
-                <View
+                <TouchableOpacity
                   key={doc.id}
+                  activeOpacity={0.8}
+                  onPress={() => openRecentDocument(doc)}
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
@@ -1030,7 +1063,7 @@ export default function DashboardScreen() {
                       {formatBytes(doc.size_bytes)}
                     </Text>
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })
           )}
@@ -1089,7 +1122,11 @@ export default function DashboardScreen() {
                 >
                   <Feather name="arrow-left" size={16} color="white" />
                   <Text
-                    style={{ color: "white", fontFamily: "Manrope_Bold", marginLeft: 8 }}
+                    style={{
+                      color: "white",
+                      fontFamily: "Manrope_Bold",
+                      marginLeft: 8,
+                    }}
                   >
                     Back Up
                   </Text>
@@ -1216,7 +1253,9 @@ export default function DashboardScreen() {
                   setNewFolderName("");
                 }}
               >
-                <Text style={{ color: THEME.textMuted, fontFamily: "Manrope_Bold" }}>
+                <Text
+                  style={{ color: THEME.textMuted, fontFamily: "Manrope_Bold" }}
+                >
                   Cancel
                 </Text>
               </TouchableOpacity>
@@ -1264,7 +1303,11 @@ export default function DashboardScreen() {
             >
               <View className="flex-row justify-between items-center mb-6">
                 <Text
-                  style={{ color: "white", fontSize: 20, fontFamily: "SpaceGrotesk_Bold" }}
+                  style={{
+                    color: "white",
+                    fontSize: 20,
+                    fontFamily: "SpaceGrotesk_Bold",
+                  }}
                 >
                   Create Note
                 </Text>
@@ -1325,7 +1368,11 @@ export default function DashboardScreen() {
                   <ActivityIndicator color="black" />
                 ) : (
                   <Text
-                    style={{ color: "black", fontFamily: "SpaceGrotesk_Bold", fontSize: 16 }}
+                    style={{
+                      color: "black",
+                      fontFamily: "SpaceGrotesk_Bold",
+                      fontSize: 16,
+                    }}
                   >
                     Encrypt & Save
                   </Text>

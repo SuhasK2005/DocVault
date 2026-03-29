@@ -4,10 +4,10 @@ import {
   Text,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   Image,
   Alert,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { useNavigation } from "@react-navigation/native";
@@ -29,22 +29,26 @@ const ProfileScreen = () => {
   const logout = useAuthStore((state) => state.logout);
 
   const handleLogout = async () => {
-    Alert.alert("Terminate Session", "Are you sure you want to logout of the vault?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Logout",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            const { error } = await supabase.auth.signOut();
-            if (error) throw error;
-            logout();
-          } catch (err: any) {
-            Alert.alert("Logout Error", err.message);
-          }
+    Alert.alert(
+      "Terminate Session",
+      "Are you sure you want to logout of the vault?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Logout",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const { error } = await supabase.auth.signOut();
+              if (error) throw error;
+              logout();
+            } catch (err: any) {
+              Alert.alert("Logout Error", err.message);
+            }
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   const SettingsItem = ({
@@ -112,7 +116,7 @@ const ProfileScreen = () => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: THEME.bg }}>
       <StatusBar style="light" />
-      
+
       {/* Header */}
       <View
         style={{
@@ -153,7 +157,10 @@ const ProfileScreen = () => {
         </Text>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, paddingHorizontal: 24 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        style={{ flex: 1, paddingHorizontal: 24 }}
+      >
         {/* Profile Card */}
         <View
           style={{
@@ -169,7 +176,12 @@ const ProfileScreen = () => {
           {user?.user_metadata?.avatar_url ? (
             <Image
               source={{ uri: user.user_metadata.avatar_url }}
-              style={{ width: 100, height: 100, borderRadius: 50, marginBottom: 16 }}
+              style={{
+                width: 100,
+                height: 100,
+                borderRadius: 50,
+                marginBottom: 16,
+              }}
             />
           ) : (
             <View
@@ -209,11 +221,29 @@ const ProfileScreen = () => {
 
           {/* Storage Bar */}
           <View style={{ width: "100%", marginTop: 16 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 8 }}>
-              <Text style={{ color: "white", fontSize: 13, fontFamily: "SpaceGrotesk_Bold" }}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                marginBottom: 8,
+              }}
+            >
+              <Text
+                style={{
+                  color: "white",
+                  fontSize: 13,
+                  fontFamily: "SpaceGrotesk_Bold",
+                }}
+              >
                 Storage Capacity
               </Text>
-              <Text style={{ color: THEME.accent, fontSize: 13, fontFamily: "SpaceGrotesk_Bold" }}>
+              <Text
+                style={{
+                  color: THEME.accent,
+                  fontSize: 13,
+                  fontFamily: "SpaceGrotesk_Bold",
+                }}
+              >
                 85% Full
               </Text>
             </View>
@@ -234,7 +264,13 @@ const ProfileScreen = () => {
                 }}
               />
             </View>
-            <Text style={{ color: THEME.textMuted, fontSize: 12, fontFamily: "Manrope" }}>
+            <Text
+              style={{
+                color: THEME.textMuted,
+                fontSize: 12,
+                fontFamily: "Manrope",
+              }}
+            >
               850 GB / 1 TB
             </Text>
           </View>
@@ -285,8 +321,16 @@ const ProfileScreen = () => {
         >
           Support & Legal
         </Text>
-        <SettingsItem icon="help-circle" title="Vault Support" subtitle="Get help with your vault" />
-        <SettingsItem icon="file-text" title="Privacy Policy" subtitle="Your data rights" />
+        <SettingsItem
+          icon="help-circle"
+          title="Vault Support"
+          subtitle="Get help with your vault"
+        />
+        <SettingsItem
+          icon="file-text"
+          title="Privacy Policy"
+          subtitle="Your data rights"
+        />
 
         {/* Logout */}
         <TouchableOpacity

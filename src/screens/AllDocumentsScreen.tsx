@@ -1102,7 +1102,7 @@ export default function AllDocumentsScreen() {
               fontSize: 16,
               marginLeft: 12,
             }}
-            placeholder="Search the secure vault..."
+            placeholder="Search folders..."
             placeholderTextColor={THEME.textMuted}
             value={folderSearch}
             onChangeText={setFolderSearch}
