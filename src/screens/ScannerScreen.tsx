@@ -38,7 +38,12 @@ type FolderNode = {
   parent_id: string | null;
 };
 
-type ScannerStep = "camera" | "crop" | "cropped_preview" | "preview" | "final_pdf_preview";
+type ScannerStep =
+  | "camera"
+  | "crop"
+  | "cropped_preview"
+  | "preview"
+  | "final_pdf_preview";
 
 export default function ScannerScreen() {
   const navigation = useNavigation<any>();
@@ -86,7 +91,7 @@ export default function ScannerScreen() {
 
   const currentPickerFolderId = React.useMemo(
     () => (pickerStack.length ? pickerStack[pickerStack.length - 1].id : null),
-    [pickerStack]
+    [pickerStack],
   );
 
   const currentPickerFolderName = React.useMemo(
@@ -94,12 +99,12 @@ export default function ScannerScreen() {
       pickerStack.length
         ? pickerStack[pickerStack.length - 1].name
         : "Main Vault",
-    [pickerStack]
+    [pickerStack],
   );
 
   const visiblePickerFolders = React.useMemo(() => {
     return folders.filter(
-      (folder) => (folder.parent_id || null) === currentPickerFolderId
+      (folder) => (folder.parent_id || null) === currentPickerFolderId,
     );
   }, [folders, currentPickerFolderId]);
 
@@ -130,21 +135,18 @@ export default function ScannerScreen() {
     setFolderPickerVisible(false);
   };
 
-  const appendPage = React.useCallback(
-    (uri: string) => {
-      setPages((prev) => [
-        ...prev,
-        {
-          id: `${Date.now()}-${Math.random()}`,
-          imageUri: uri,
-        },
-      ]);
-      setCapturedUri(null);
-      setCroppedUri(null);
-      setStep("preview");
-    },
-    []
-  );
+  const appendPage = React.useCallback((uri: string) => {
+    setPages((prev) => [
+      ...prev,
+      {
+        id: `${Date.now()}-${Math.random()}`,
+        imageUri: uri,
+      },
+    ]);
+    setCapturedUri(null);
+    setCroppedUri(null);
+    setStep("preview");
+  }, []);
 
   const handleSave = async () => {
     if (!user?.id) {
@@ -213,12 +215,14 @@ export default function ScannerScreen() {
           setUploadComplete(true);
           Alert.alert("Success", "Scanned document saved to vault.");
         } catch (err: any) {
-          Alert.alert("Upload Error", err?.message || "Could not save scanned document in background.");
+          Alert.alert(
+            "Upload Error",
+            err?.message || "Could not save scanned document in background.",
+          );
         } finally {
           setUploading(false);
         }
       })();
-
     } catch (err: any) {
       Alert.alert("Error", err?.message || "Could not generate PDF");
       setUploading(false);
@@ -259,7 +263,7 @@ export default function ScannerScreen() {
 
     if (step === "cropped_preview" && croppedUri) {
       return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: THEME.bg }}>
+        <View style={{ flex: 1, backgroundColor: THEME.bg }}>
           <BlurView
             tint="dark"
             intensity={80}
@@ -289,10 +293,25 @@ export default function ScannerScreen() {
             </TouchableOpacity>
 
             <View style={{ alignItems: "center" }}>
-              <Text style={{ color: "white", fontSize: 18, fontFamily: "SpaceGrotesk_Bold" }}>
+              <Text
+                style={{
+                  color: "white",
+                  fontSize: 18,
+                  fontFamily: "SpaceGrotesk_Bold",
+                }}
+              >
                 Confirm Crop
               </Text>
-              <Text style={{ color: THEME.textMuted, fontSize: 10, fontFamily: "SpaceGrotesk_Bold", letterSpacing: 1, textTransform: "uppercase", marginTop: 2 }}>
+              <Text
+                style={{
+                  color: THEME.textMuted,
+                  fontSize: 10,
+                  fontFamily: "SpaceGrotesk_Bold",
+                  letterSpacing: 1,
+                  textTransform: "uppercase",
+                  marginTop: 2,
+                }}
+              >
                 QUALITY CHECK
               </Text>
             </View>
@@ -300,12 +319,23 @@ export default function ScannerScreen() {
             <View style={{ width: 44 }} />
           </BlurView>
 
-          <View style={{ flex: 1, padding: 20 }}>
-            <View style={{ flex: 1, borderRadius: 24, overflow: "hidden", borderWidth: 1, borderColor: THEME.borderGlass }}>
+          <View style={{ flex: 1, paddingHorizontal: 12, paddingBottom: 20 }}>
+            <View
+              style={{
+                width: "100%",
+                aspectRatio: 2 / 3,
+                alignSelf: "center",
+                borderRadius: 24,
+                overflow: "hidden",
+                borderWidth: 1,
+                borderColor: THEME.borderGlass,
+                backgroundColor: "#ffffff",
+              }}
+            >
               <Image
                 source={{ uri: croppedUri }}
                 style={{ width: "100%", height: "100%" }}
-                resizeMode="contain"
+                resizeMode="cover"
               />
             </View>
           </View>
@@ -324,7 +354,13 @@ export default function ScannerScreen() {
               }}
               onPress={() => setStep("camera")}
             >
-              <Text style={{ color: "white", fontFamily: "SpaceGrotesk_Bold", fontSize: 16 }}>
+              <Text
+                style={{
+                  color: "white",
+                  fontFamily: "SpaceGrotesk_Bold",
+                  fontSize: 16,
+                }}
+              >
                 RETAKE
               </Text>
             </TouchableOpacity>
@@ -340,18 +376,24 @@ export default function ScannerScreen() {
               }}
               onPress={() => appendPage(croppedUri)}
             >
-              <Text style={{ color: "#3d1a08", fontFamily: "SpaceGrotesk_Bold", fontSize: 16 }}>
+              <Text
+                style={{
+                  color: "#3d1a08",
+                  fontFamily: "SpaceGrotesk_Bold",
+                  fontSize: 16,
+                }}
+              >
                 CONTINUE
               </Text>
             </TouchableOpacity>
           </View>
-        </SafeAreaView>
+        </View>
       );
     }
 
     if (step === "final_pdf_preview" && finalPdfUri) {
       return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: THEME.bg }}>
+        <View style={{ flex: 1, backgroundColor: THEME.bg }}>
           <BlurView
             tint="dark"
             intensity={80}
@@ -367,10 +409,25 @@ export default function ScannerScreen() {
             <View style={{ width: 44 }} />
 
             <View style={{ alignItems: "center" }}>
-              <Text style={{ color: "white", fontSize: 18, fontFamily: "SpaceGrotesk_Bold" }}>
+              <Text
+                style={{
+                  color: "white",
+                  fontSize: 18,
+                  fontFamily: "SpaceGrotesk_Bold",
+                }}
+              >
                 Final Document
               </Text>
-              <Text style={{ color: THEME.textMuted, fontSize: 10, fontFamily: "SpaceGrotesk_Bold", letterSpacing: 1, textTransform: "uppercase", marginTop: 2 }}>
+              <Text
+                style={{
+                  color: THEME.textMuted,
+                  fontSize: 10,
+                  fontFamily: "SpaceGrotesk_Bold",
+                  letterSpacing: 1,
+                  textTransform: "uppercase",
+                  marginTop: 2,
+                }}
+              >
                 {uploadComplete ? "UPLOADED" : "SECURING..."}
               </Text>
             </View>
@@ -387,7 +444,13 @@ export default function ScannerScreen() {
                 }}
                 onPress={() => navigation.goBack()}
               >
-                <Text style={{ color: "#3d1a08", fontFamily: "SpaceGrotesk_Bold", fontSize: 14 }}>
+                <Text
+                  style={{
+                    color: "#3d1a08",
+                    fontFamily: "SpaceGrotesk_Bold",
+                    fontSize: 14,
+                  }}
+                >
                   DONE
                 </Text>
               </TouchableOpacity>
@@ -396,27 +459,99 @@ export default function ScannerScreen() {
             )}
           </BlurView>
 
-          <View style={{ flex: 1, margin: 24, borderRadius: 24, overflow: "hidden", borderWidth: 1, borderColor: THEME.borderGlass, backgroundColor: THEME.surface }}>
+          <View
+            style={{
+              flex: 1,
+              margin: 24,
+              borderRadius: 24,
+              overflow: "hidden",
+              borderWidth: 1,
+              borderColor: THEME.borderGlass,
+              backgroundColor: THEME.surface,
+            }}
+          >
             <ScrollView showsVerticalScrollIndicator={false}>
               {pages.map((p, idx) => (
-                <View key={p.id} style={{ marginBottom: 20, alignItems: 'center' }}>
-                   <View style={{ alignSelf: 'flex-start', marginLeft: 20, marginBottom: 8, backgroundColor: THEME.surfaceBright, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 }}>
-                      <Text style={{ color: THEME.accent, fontSize: 10, fontFamily: 'SpaceGrotesk_Bold' }}>PAGE {idx + 1}</Text>
-                   </View>
-                   <Image 
-                    source={{ uri: p.imageUri }} 
-                    style={{ width: '100%', aspectRatio: 0.707, borderRadius: 12 }} 
-                    resizeMode="contain" 
-                   />
+                <View
+                  key={p.id}
+                  style={{ marginBottom: 20, paddingHorizontal: 16 }}
+                >
+                  <View
+                    style={{
+                      alignSelf: "flex-start",
+                      marginBottom: 8,
+                      backgroundColor: THEME.surfaceBright,
+                      paddingHorizontal: 12,
+                      paddingVertical: 4,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: THEME.borderGlass,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: THEME.accent,
+                        fontSize: 10,
+                        fontFamily: "SpaceGrotesk_Bold",
+                      }}
+                    >
+                      PAGE {idx + 1}
+                    </Text>
+                  </View>
+
+                  <View
+                    style={{
+                      width: "100%",
+                      aspectRatio: 2 / 3,
+                      backgroundColor: "#ffffff",
+                      borderRadius: 10,
+                      overflow: "hidden",
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 6 },
+                      shadowOpacity: 0.35,
+                      shadowRadius: 10,
+                      elevation: 7,
+                    }}
+                  >
+                    <Image
+                      source={{ uri: p.imageUri }}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        backgroundColor: "#ffffff",
+                      }}
+                      resizeMode="cover"
+                    />
+                  </View>
                 </View>
               ))}
             </ScrollView>
-            
+
             {/* Status Overlay */}
             {!uploadComplete && (
-              <BlurView tint="dark" intensity={40} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, alignItems: 'center' }}>
-                <ActivityIndicator color={THEME.accent} style={{ marginBottom: 8 }} />
-                <Text style={{ color: "white", fontFamily: "SpaceGrotesk_Bold", fontSize: 12 }}>
+              <BlurView
+                tint="dark"
+                intensity={40}
+                style={{
+                  position: "absolute",
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  padding: 20,
+                  alignItems: "center",
+                }}
+              >
+                <ActivityIndicator
+                  color={THEME.accent}
+                  style={{ marginBottom: 8 }}
+                />
+                <Text
+                  style={{
+                    color: "white",
+                    fontFamily: "SpaceGrotesk_Bold",
+                    fontSize: 12,
+                  }}
+                >
                   SYNCING TO VAULT...
                 </Text>
               </BlurView>
@@ -424,21 +559,37 @@ export default function ScannerScreen() {
           </View>
 
           {uploadComplete && (
-            <View style={{ paddingBottom: 40, alignItems: 'center' }}>
-               <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Feather name="check-circle" size={16} color="#22c55e" />
-                  <Text style={{ color: "#22c55e", fontFamily: "Manrope_Bold", fontSize: 14 }}>Safe in Vault</Text>
-               </View>
+            <View style={{ paddingBottom: 40, alignItems: "center" }}>
+              <View
+                style={{
+                  backgroundColor: "rgba(34, 197, 94, 0.1)",
+                  paddingHorizontal: 20,
+                  paddingVertical: 10,
+                  borderRadius: 20,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <Feather name="check-circle" size={16} color="#22c55e" />
+                <Text
+                  style={{
+                    color: "#22c55e",
+                    fontFamily: "Manrope_Bold",
+                    fontSize: 14,
+                  }}
+                >
+                  Safe in Vault
+                </Text>
+              </View>
             </View>
           )}
-        </SafeAreaView>
+        </View>
       );
     }
 
-
-
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: THEME.bg }}>
+      <View style={{ flex: 1, backgroundColor: THEME.bg }}>
         <BlurView
           tint="dark"
           intensity={80}
@@ -468,10 +619,25 @@ export default function ScannerScreen() {
           </TouchableOpacity>
 
           <View style={{ alignItems: "center" }}>
-            <Text style={{ color: "white", fontSize: 18, fontFamily: "SpaceGrotesk_Bold" }}>
+            <Text
+              style={{
+                color: "white",
+                fontSize: 18,
+                fontFamily: "SpaceGrotesk_Bold",
+              }}
+            >
               Scanner
             </Text>
-            <Text style={{ color: THEME.textMuted, fontSize: 10, fontFamily: "SpaceGrotesk_Bold", letterSpacing: 1, textTransform: "uppercase", marginTop: 2 }}>
+            <Text
+              style={{
+                color: THEME.textMuted,
+                fontSize: 10,
+                fontFamily: "SpaceGrotesk_Bold",
+                letterSpacing: 1,
+                textTransform: "uppercase",
+                marginTop: 2,
+              }}
+            >
               VAULT INTAKE
             </Text>
           </View>
@@ -494,7 +660,14 @@ export default function ScannerScreen() {
         />
 
         <Modal visible={folderPickerVisible} transparent animationType="fade">
-          <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.85)" }}>
+          <View
+            style={{
+              flex: 1,
+              justifyContent: "center",
+              alignItems: "center",
+              backgroundColor: "rgba(0,0,0,0.85)",
+            }}
+          >
             <View
               style={{
                 backgroundColor: THEME.surface,
@@ -528,7 +701,10 @@ export default function ScannerScreen() {
                 </Text>
               </View>
 
-              <ScrollView style={{ maxHeight: 300, marginBottom: 16 }} showsVerticalScrollIndicator={false}>
+              <ScrollView
+                style={{ maxHeight: 300, marginBottom: 16 }}
+                showsVerticalScrollIndicator={false}
+              >
                 {/* Back up button */}
                 {pickerStack.length > 0 && (
                   <TouchableOpacity
@@ -544,7 +720,11 @@ export default function ScannerScreen() {
                   >
                     <Feather name="arrow-left" size={16} color="white" />
                     <Text
-                      style={{ color: "white", fontFamily: "Manrope_Bold", marginLeft: 8 }}
+                      style={{
+                        color: "white",
+                        fontFamily: "Manrope_Bold",
+                        marginLeft: 8,
+                      }}
                     >
                       Back Up
                     </Text>
@@ -556,9 +736,15 @@ export default function ScannerScreen() {
                   <TouchableOpacity
                     style={{
                       padding: 16,
-                      backgroundColor: selectedFolderId === null ? THEME.surfaceBright : "transparent",
+                      backgroundColor:
+                        selectedFolderId === null
+                          ? THEME.surfaceBright
+                          : "transparent",
                       borderWidth: 1,
-                      borderColor: selectedFolderId === null ? THEME.accent : THEME.borderGlass,
+                      borderColor:
+                        selectedFolderId === null
+                          ? THEME.accent
+                          : THEME.borderGlass,
                       borderRadius: 16,
                       marginBottom: 8,
                       flexDirection: "row",
@@ -571,7 +757,11 @@ export default function ScannerScreen() {
                   >
                     <Feather name="shield" size={16} color={THEME.accent} />
                     <Text
-                      style={{ color: "white", fontFamily: "Manrope_Bold", marginLeft: 12 }}
+                      style={{
+                        color: "white",
+                        fontFamily: "Manrope_Bold",
+                        marginLeft: 12,
+                      }}
                     >
                       Main Vault
                     </Text>
@@ -579,8 +769,12 @@ export default function ScannerScreen() {
                 )}
 
                 {visiblePickerFolders.length === 0 && pickerStack.length > 0 ? (
-                  <View style={{ padding: 20, alignItems: 'center' }}>
-                     <Text style={{ color: THEME.textMuted, fontStyle: 'italic' }}>No subfolders here.</Text>
+                  <View style={{ padding: 20, alignItems: "center" }}>
+                    <Text
+                      style={{ color: THEME.textMuted, fontStyle: "italic" }}
+                    >
+                      No subfolders here.
+                    </Text>
                   </View>
                 ) : (
                   visiblePickerFolders.map((folder) => {
@@ -590,9 +784,13 @@ export default function ScannerScreen() {
                         key={folder.id}
                         style={{
                           padding: 16,
-                          backgroundColor: selected ? THEME.surfaceBright : "transparent",
+                          backgroundColor: selected
+                            ? THEME.surfaceBright
+                            : "transparent",
                           borderWidth: 1,
-                          borderColor: selected ? THEME.accent : THEME.borderGlass,
+                          borderColor: selected
+                            ? THEME.accent
+                            : THEME.borderGlass,
                           borderRadius: 16,
                           marginBottom: 8,
                           flexDirection: "row",
@@ -657,7 +855,9 @@ export default function ScannerScreen() {
                       setFolderPickerVisible(false);
                     }}
                   >
-                    <Text style={{ color: "black", fontFamily: "Manrope_Bold" }}>
+                    <Text
+                      style={{ color: "black", fontFamily: "Manrope_Bold" }}
+                    >
                       Select Folder
                     </Text>
                   </TouchableOpacity>
@@ -666,15 +866,28 @@ export default function ScannerScreen() {
             </View>
           </View>
         </Modal>
-      </SafeAreaView>
+      </View>
     );
   };
 
   if (uploading && step !== "preview") {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: THEME.bg }}>
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: THEME.bg,
+        }}
+      >
         <ActivityIndicator color={THEME.accent} />
-        <Text style={{ color: THEME.textMuted, fontFamily: "SpaceGrotesk_Bold", marginTop: 16 }}>
+        <Text
+          style={{
+            color: THEME.textMuted,
+            fontFamily: "SpaceGrotesk_Bold",
+            marginTop: 16,
+          }}
+        >
           PREPARING VAULT...
         </Text>
       </View>

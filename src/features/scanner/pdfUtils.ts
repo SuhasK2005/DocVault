@@ -5,7 +5,6 @@ import { ScannerPage } from "./types";
 
 /* ------------------------------------------------------------------ */
 
-
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                             */
 /* ------------------------------------------------------------------ */
@@ -24,6 +23,9 @@ const sanitizeFileName = (value: string) =>
     .replace(/[^a-zA-Z0-9-_ ]/g, "")
     .replace(/\s+/g, " ")
     .slice(0, 80) || "scan";
+
+const OUTPUT_WIDTH = 2400;
+const OUTPUT_HEIGHT = 3600;
 
 const imageToDataUri = async (uri: string) => {
   const base64 = await FileSystem.readAsStringAsync(uri, {
@@ -47,13 +49,15 @@ export const createPdfFromPages = async (params: {
     params.pages.map(async (page) => {
       const optimizedUri = await ImageManipulator.manipulateAsync(
         page.imageUri,
-        [{ resize: { width: 2000 } }],
-        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+        [{ resize: { width: OUTPUT_WIDTH, height: OUTPUT_HEIGHT } }],
+        { compress: 0.92, format: ImageManipulator.SaveFormat.JPEG },
       );
       const dataUri = await imageToDataUri(optimizedUri.uri);
       return `
       <div class="page">
-        <img src="${escapeHtml(dataUri)}" />
+        <div class="sheet">
+          <img src="${escapeHtml(dataUri)}" />
+        </div>
       </div>`;
     }),
   );
@@ -63,10 +67,53 @@ export const createPdfFromPages = async (params: {
     <head>
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <style>
-        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-        .page { width: 100%; min-height: 100vh; display: flex; align-items: center; justify-content: center; page-break-after: always; padding: 20px; box-sizing: border-box; }
+        @page {
+          size: 8in 12in;
+          margin: 0;
+        }
+        html, body {
+          margin: 0;
+          padding: 0;
+          width: 8in;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          background: #000;
+        }
+        .page {
+          width: 8in;
+          height: 12in;
+          margin: 0;
+          padding: 0;
+          page-break-after: always;
+          page-break-inside: avoid;
+          break-inside: avoid;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+          box-sizing: border-box;
+        }
         .page:last-child { page-break-after: auto; }
-        img { width: 100%; height: auto; object-fit: contain; }
+        .sheet {
+          width: 8in;
+          height: 12in;
+          margin: 0;
+          padding: 0;
+          background: #fff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+          box-sizing: border-box;
+        }
+        img {
+          display: block;
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          object-position: center center;
+          margin: 0;
+          padding: 0;
+        }
       </style>
     </head>
     <body>
