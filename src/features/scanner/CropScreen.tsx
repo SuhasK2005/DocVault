@@ -2,6 +2,7 @@ import React from "react";
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   Image,
   LayoutChangeEvent,
   PanResponder,
@@ -44,7 +45,7 @@ const HANDLE_HIT = 32;
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
-const getContainRect = (
+const getCoverRect = (
   containerWidth: number,
   containerHeight: number,
   imageWidth: number,
@@ -54,53 +55,15 @@ const getContainRect = (
   const containerRatio = containerWidth / containerHeight;
 
   if (imageRatio > containerRatio) {
+    const height = containerHeight;
+    const width = height * imageRatio;
+    return { x: (containerWidth - width) / 2, y: 0, width, height };
+  } else {
     const width = containerWidth;
     const height = width / imageRatio;
     return { x: 0, y: (containerHeight - height) / 2, width, height };
   }
-
-  const height = containerHeight;
-  const width = height * imageRatio;
-  return { x: (containerWidth - width) / 2, y: 0, width, height };
 };
-
-const defaultPoints = (ir: Rect, pad: number = 20): CropPoint[] => [
-  { x: ir.x + pad, y: ir.y + pad },
-  { x: ir.x + ir.width - pad, y: ir.y + pad },
-  { x: ir.x + ir.width - pad, y: ir.y + ir.height - pad },
-  { x: ir.x + pad, y: ir.y + ir.height - pad },
-];
-
-const getTargetRectInside = (container: Rect, inset = 10): Rect => {
-  const usableWidth = Math.max(2, container.width - inset * 2);
-  const usableHeight = Math.max(2, container.height - inset * 2);
-  const usableRatio = usableWidth / usableHeight;
-
-  let width = usableWidth;
-  let height = usableHeight;
-
-  if (usableRatio > TARGET_RATIO) {
-    height = usableHeight;
-    width = height * TARGET_RATIO;
-  } else {
-    width = usableWidth;
-    height = width / TARGET_RATIO;
-  }
-
-  return {
-    x: container.x + (container.width - width) / 2,
-    y: container.y + (container.height - height) / 2,
-    width,
-    height,
-  };
-};
-
-const rectToPoints = (rect: Rect): CropPoint[] => [
-  { x: rect.x, y: rect.y },
-  { x: rect.x + rect.width, y: rect.y },
-  { x: rect.x + rect.width, y: rect.y + rect.height },
-  { x: rect.x, y: rect.y + rect.height },
-];
 
 const fitRectToTargetWithinBounds = (
   rect: Rect,
@@ -134,6 +97,11 @@ const fitRectToTargetWithinBounds = (
 };
 
 export default function CropScreen({ imageUri, onBack, onCropped }: Props) {
+  const { width: screenWidth } = Dimensions.get("window");
+  const GAP = 24;
+  const frameWidth = screenWidth - GAP * 2;
+  const frameHeight = frameWidth / TARGET_RATIO;
+
   const [containerRect, setContainerRect] = React.useState<Rect | null>(null);
   const [imageSize, setImageSize] = React.useState<{
     width: number;
@@ -152,7 +120,7 @@ export default function CropScreen({ imageUri, onBack, onCropped }: Props) {
 
   const imageRect = React.useMemo(() => {
     if (!containerRect || !imageSize) return null;
-    return getContainRect(
+    return getCoverRect(
       containerRect.width,
       containerRect.height,
       imageSize.width,
@@ -160,11 +128,16 @@ export default function CropScreen({ imageUri, onBack, onCropped }: Props) {
     );
   }, [containerRect, imageSize]);
 
-  // Set default points when imageRect is ready
+  // Set default points to match the 2:3 container completely
   React.useEffect(() => {
-    if (!imageRect) return;
-    setPoints(rectToPoints(getTargetRectInside(imageRect)));
-  }, [imageRect?.x, imageRect?.y, imageRect?.width, imageRect?.height]);
+    if (!containerRect) return;
+    setPoints([
+      { x: 0, y: 0 },
+      { x: containerRect.width, y: 0 },
+      { x: containerRect.width, y: containerRect.height },
+      { x: 0, y: containerRect.height },
+    ]);
+  }, [containerRect?.width, containerRect?.height]);
 
   const onLayout = (event: LayoutChangeEvent) => {
     const { x, y, width, height } = event.nativeEvent.layout;
@@ -176,6 +149,8 @@ export default function CropScreen({ imageUri, onBack, onCropped }: Props) {
   pointsRef.current = points;
   const imageRectRef = React.useRef(imageRect);
   imageRectRef.current = imageRect;
+  const containerRectRef = React.useRef(containerRect);
+  containerRectRef.current = containerRect;
 
   const initialPointsRef = React.useRef<CropPoint[]>([]);
 
@@ -191,15 +166,15 @@ export default function CropScreen({ imageUri, onBack, onCropped }: Props) {
           _: GestureResponderEvent,
           gesture: PanResponderGestureState,
         ) => {
-          const ir = imageRectRef.current;
+          const cr = containerRectRef.current;
           const initial = initialPointsRef.current[index];
-          if (!ir || !initial) return;
+          if (!cr || !initial) return;
 
           setPoints((prev) => {
             const next = [...prev];
             next[index] = {
-              x: clamp(initial.x + gesture.dx, ir.x, ir.x + ir.width),
-              y: clamp(initial.y + gesture.dy, ir.y, ir.y + ir.height),
+              x: clamp(initial.x + gesture.dx, 0, cr.width),
+              y: clamp(initial.y + gesture.dy, 0, cr.height),
             };
             return next;
           });
@@ -209,8 +184,13 @@ export default function CropScreen({ imageUri, onBack, onCropped }: Props) {
   ).current;
 
   const handleReset = () => {
-    if (!imageRect) return;
-    setPoints(rectToPoints(getTargetRectInside(imageRect)));
+    if (!containerRect) return;
+    setPoints([
+      { x: 0, y: 0 },
+      { x: containerRect.width, y: 0 },
+      { x: containerRect.width, y: containerRect.height },
+      { x: 0, y: containerRect.height },
+    ]);
   };
 
   const handleCrop = async () => {
@@ -351,12 +331,27 @@ export default function CropScreen({ imageUri, onBack, onCropped }: Props) {
       </BlurView>
 
       {/* Image + Crop overlay */}
-      <View style={{ flex: 1, paddingHorizontal: 24, paddingBottom: 24 }}>
-        <View style={{ flex: 1 }} onLayout={onLayout}>
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          paddingBottom: 24,
+        }}
+      >
+        <View
+          style={{
+            width: frameWidth,
+            height: frameHeight,
+            overflow: "hidden",
+            borderRadius: 16,
+          }}
+          onLayout={onLayout}
+        >
           <Image
             source={{ uri: imageUri }}
-            resizeMode="contain"
-            style={{ width: "100%", height: "100%", borderRadius: 16 }}
+            resizeMode="cover"
+            style={{ width: "100%", height: "100%" }}
           />
 
           {points.length === 4 && containerRect && (
