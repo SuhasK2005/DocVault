@@ -1,46 +1,34 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   Platform,
   ScrollView,
-  TextInput,
   KeyboardAvoidingView,
-  Alert,
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthStore } from "../stores/useAuthStore";
 import { StatusBar } from "expo-status-bar";
 import { Feather } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import * as LocalAuthentication from "expo-local-authentication";
 import { supabase } from "../services/supabase";
-import { deriveMasterKey } from "../services/encryption";
 
 export default function UnlockScreen() {
   const setUnlocked = useAuthStore((state) => state.setUnlocked);
-  const setMasterKey = useAuthStore((state) => state.setMasterKey);
   const logout = useAuthStore((state) => state.logout);
-  const user = useAuthStore((state) => state.user);
 
-  const [step, setStep] = useState<"biometrics" | "loading" | "setup">(
-    "biometrics"
-  );
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [step, setStep] = useState<"biometrics" | "loading">("biometrics");
 
   const handleDeviceAuth = async () => {
     try {
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
 
-      // If device doesn't have biometrics/passcode, skip directly to profile check
+      // If device doesn't have biometrics/passcode, skip and unlock directly
       if (!hasHardware || !isEnrolled) {
-        setStep("loading");
-        await checkUserProfile();
+        setUnlocked(true);
         return;
       }
 
@@ -52,70 +40,10 @@ export default function UnlockScreen() {
 
       if (result.success) {
         setStep("loading");
-        await checkUserProfile();
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const checkUserProfile = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("master_hash, master_salt")
-        .eq("id", user?.id)
-        .single();
-
-      if (error && error.code !== "PGRST116") {
-        console.error("Error fetching profile", error);
-      }
-
-      if (data && data.master_hash && data.master_salt) {
-        // Existing user, securely unlocked via device!
         setUnlocked(true);
-      } else {
-        // New user, needs to set up the Master PIN
-        setStep("setup");
       }
     } catch (e) {
       console.error(e);
-      setStep("setup");
-    }
-  };
-
-  const handleSetupMasterPin = async () => {
-    if (password.trim() !== confirmPassword.trim()) {
-      Alert.alert("Error", "PINs do not match.");
-      return;
-    }
-    if (password.trim().length !== 6) {
-      Alert.alert("Error", "Master PIN must be exactly 6 digits.");
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      const { derivedKeyHex, saltHex, authHash } = deriveMasterKey(
-        password.trim()
-      );
-
-      const { error } = await supabase.from("profiles").upsert({
-        id: user?.id,
-        master_hash: authHash,
-        master_salt: saltHex,
-      });
-
-      if (error) throw error;
-
-      // Save the newly derived key temporarily so they don't have to type it again this exact session
-      setMasterKey(derivedKeyHex);
-      setUnlocked(true);
-    } catch (err) {
-      console.error(err);
-      Alert.alert("Error", "Failed to setup Master PIN.");
-    } finally {
-      setIsProcessing(false);
     }
   };
 
@@ -169,7 +97,7 @@ export default function UnlockScreen() {
                 }}
               >
                 <Feather
-                  name={step === "setup" ? "shield" : "lock"}
+                  name="lock"
                   size={28}
                   color={THEME.accent}
                 />
@@ -198,7 +126,7 @@ export default function UnlockScreen() {
                     lineHeight: 48,
                   }}
                 >
-                  {step === "setup" ? "Secure Your\nVault" : "Vault\nLocked"}
+                  Vault{`\n`}Locked
                 </Text>
                 <Text
                   style={{
@@ -209,9 +137,7 @@ export default function UnlockScreen() {
                     marginBottom: 60,
                   }}
                 >
-                  {step === "setup"
-                    ? "Welcome! Please set a 6-digit Master PIN. You will need this later to encrypt or open your files."
-                    : step === "loading"
+                  {step === "loading"
                     ? "Verifying secure enclave..."
                     : "App locked. Tap below to use your device biometrics or passcode to enter."}
                 </Text>
@@ -259,117 +185,6 @@ export default function UnlockScreen() {
                   </Text>
                   <Feather name="smile" size={20} color="black" />
                 </TouchableOpacity>
-              )}
-
-              {step === "setup" && (
-                <View style={{ gap: 16 }}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      backgroundColor: THEME.surface,
-                      borderRadius: 20,
-                      borderWidth: 1,
-                      borderColor: THEME.borderGlass,
-                      paddingHorizontal: 20,
-                      height: 64,
-                    }}
-                  >
-                    <Feather name="key" size={20} color={THEME.textMuted} />
-                    <TextInput
-                      style={{
-                        flex: 1,
-                        color: "white",
-                        fontSize: 20,
-                        fontFamily: "SpaceGrotesk_Bold",
-                        marginLeft: 16,
-                        letterSpacing: 4,
-                      }}
-                      placeholder="Create 6-digit PIN"
-                      placeholderTextColor="rgba(255,255,255,0.2)"
-                      secureTextEntry
-                      keyboardType="number-pad"
-                      maxLength={6}
-                      value={password}
-                      onChangeText={(val) =>
-                        setPassword(val.replace(/[^0-9]/g, ""))
-                      }
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      editable={!isProcessing}
-                    />
-                  </View>
-
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      backgroundColor: THEME.surface,
-                      borderRadius: 20,
-                      borderWidth: 1,
-                      borderColor: THEME.borderGlass,
-                      paddingHorizontal: 20,
-                      height: 64,
-                    }}
-                  >
-                    <Feather name="key" size={20} color={THEME.textMuted} />
-                    <TextInput
-                      style={{
-                        flex: 1,
-                        color: "white",
-                        fontSize: 20,
-                        fontFamily: "SpaceGrotesk_Bold",
-                        marginLeft: 16,
-                        letterSpacing: 4,
-                      }}
-                      placeholder="Confirm 6-digit PIN"
-                      placeholderTextColor="rgba(255,255,255,0.2)"
-                      secureTextEntry
-                      keyboardType="number-pad"
-                      maxLength={6}
-                      value={confirmPassword}
-                      onChangeText={(val) =>
-                        setConfirmPassword(val.replace(/[^0-9]/g, ""))
-                      }
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      editable={!isProcessing}
-                    />
-                  </View>
-
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={handleSetupMasterPin}
-                    style={{
-                      backgroundColor: THEME.accent,
-                      borderRadius: 20,
-                      paddingVertical: 18,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      marginTop: 16,
-                      shadowColor: THEME.accent,
-                      shadowOffset: { width: 0, height: 8 },
-                      shadowOpacity: 0.4,
-                      shadowRadius: 16,
-                      elevation: 8,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: "black",
-                        fontSize: 18,
-                        fontFamily: "SpaceGrotesk_Bold",
-                        marginRight: 12,
-                      }}
-                    >
-                      {isProcessing ? "Encrypting..." : "Complete Setup"}
-                    </Text>
-                    {!isProcessing && (
-                      <Feather name="check" size={20} color="black" />
-                    )}
-                  </TouchableOpacity>
-                </View>
               )}
             </View>
 
